@@ -396,7 +396,14 @@ export default function HistoricoPage() {
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-2">
                         <button
-                          onClick={() => copyText(String(it.por ?? 0).toFixed(2).replace(".", ","))}
+                          onClick={() =>
+  copyText(
+    (Number(String(it.por ?? 0).replace(",", ".")) || 0)
+      .toFixed(2)
+      .replace(".", ",")
+  )
+}
+
                           className="rounded-xl bg-white/10 px-3 py-2 text-xs font-semibold text-white ring-1 ring-white/10 hover:bg-white/15"
                         >
                           Copiar POR
