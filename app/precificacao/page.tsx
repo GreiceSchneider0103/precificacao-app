@@ -581,8 +581,8 @@ function showToast(type: "ok" | "err", text: string) {
       ? parseNumberPt(creditFreteOverride)
       : baseCh.creditFretePercent;
 
-    const creditFretePercent =
-      channel === "magalu" && magaluShipMode === "full" ? 0 : creditFretePercentBase;
+    const creditFretePercent = creditFretePercentBase;
+
 
     const creditCommissionPercent = creditComissaoOverride.trim()
       ? parseNumberPt(creditComissaoOverride)
@@ -1044,8 +1044,9 @@ function showToast(type: "ok" | "err", text: string) {
 
                 <p className="mt-2 text-xs text-white/50">
                   {magaluShipMode === "full"
-                    ? "No Full Magalu, não existe crédito de frete (independente do regime)."
-                    : "No envio próprio, o crédito de frete pode ser aplicado no Regime Normal (se créditos estiverem ativos)."}
+  ? "No Full Magalu, o crédito de frete pode ser aplicado no Regime Normal (se créditos estiverem ativos)."
+  : "No envio próprio, o crédito de frete pode ser aplicado no Regime Normal (se créditos estiverem ativos)."}
+
                 </p>
               </div>
             )}
