@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-type ChannelKey = "magalu" | "meli" | "shopee";
+type ChannelKey = "magalu" | "meli" | "shopee" | "site" | "outros";
 type Regime = "simples" | "normal";
 
 type ShopeeTier = {
@@ -142,6 +142,25 @@ function defaultRuleSet(name = "Regra Padrão", regime: Regime = "simples"): Rul
           tiers: shopeeTiers,
         },
       },
+site: {
+  commissionPercent: 2,     // ajuste depois como quiser
+  taxFixed: 0,
+  mainTaxPercent: defaultMainTax,
+  hasCredits: hasCreditsDefault,
+  creditFretePercent: 21.25,
+  creditCommissionPercent: 9.25,
+  targetMarginPercent: 20,
+},
+outros: {
+  commissionPercent: 20,     // ajuste depois como quiser
+  taxFixed: 0,
+  mainTaxPercent: defaultMainTax,
+  hasCredits: hasCreditsDefault,
+  creditFretePercent: 21.25,
+  creditCommissionPercent: 9.25,
+  targetMarginPercent: 20,
+}
+
     },
   };
 }
@@ -258,22 +277,33 @@ export default function ConfiguracoesPage() {
       const newMainTax = patch.regime === "normal" ? 18 : 14;
 
       finalPatch.channels = {
-        magalu: {
-          ...activeRule.channels.magalu,
-          hasCredits: newHasCredits,
-          mainTaxPercent: newMainTax,
-        },
-        meli: {
-          ...activeRule.channels.meli,
-          hasCredits: newHasCredits,
-          mainTaxPercent: newMainTax,
-        },
-        shopee: {
-          ...activeRule.channels.shopee,
-          hasCredits: newHasCredits,
-          mainTaxPercent: newMainTax,
-        },
-      };
+  magalu: {
+    ...activeRule.channels.magalu,
+    hasCredits: newHasCredits,
+    mainTaxPercent: newMainTax,
+  },
+  meli: {
+    ...activeRule.channels.meli,
+    hasCredits: newHasCredits,
+    mainTaxPercent: newMainTax,
+  },
+  shopee: {
+    ...activeRule.channels.shopee,
+    hasCredits: newHasCredits,
+    mainTaxPercent: newMainTax,
+  },
+  site: {
+    ...(activeRule.channels as any).site,
+    hasCredits: newHasCredits,
+    mainTaxPercent: newMainTax,
+  },
+  outros: {
+    ...(activeRule.channels as any).outros,
+    hasCredits: newHasCredits,
+    mainTaxPercent: newMainTax,
+  },
+};
+
     }
 
     const nextRules = store.ruleSets.map((r) => (r.id === activeRule.id ? { ...r, ...finalPatch, updatedAt: now } : r));
@@ -504,15 +534,20 @@ export default function ConfiguracoesPage() {
 
             {/* Tabs por canal */}
             <ChannelTabs
-              magalu={chMagalu}
-              meli={chMeli}
-              shopee={chShopee}
-              onMagalu={(patch) => updateChannel("magalu", patch)}
-              onMeli={(patch) => updateChannel("meli", patch)}
-              onShopee={(patch) => updateChannel("shopee", patch)}
-              onShopeeTier={(idx, patch) => updateShopeeTier(idx, patch)}
-              regime={activeRule.regime}
-            />
+  magalu={chMagalu}
+  meli={chMeli}
+  shopee={chShopee}
+  site={activeRule.channels.site}
+  outros={activeRule.channels.outros}
+  onMagalu={(patch) => updateChannel("magalu", patch)}
+  onMeli={(patch) => updateChannel("meli", patch)}
+  onShopee={(patch) => updateChannel("shopee", patch)}
+  onSite={(patch) => updateChannel("site", patch)}
+  onOutros={(patch) => updateChannel("outros", patch)}
+  onShopeeTier={(idx, patch) => updateShopeeTier(idx, patch)}
+  regime={activeRule.regime}
+/>
+
           </div>
         </div>
       </section>
@@ -526,16 +561,36 @@ function ChannelTabs(props: {
   magalu: ChannelRule;
   meli: ChannelRule;
   shopee: ChannelRule;
+  site: ChannelRule;
+  outros: ChannelRule;
+
   onMagalu: (patch: Partial<ChannelRule>) => void;
   onMeli: (patch: Partial<ChannelRule>) => void;
   onShopee: (patch: Partial<ChannelRule>) => void;
+  onSite: (patch: Partial<ChannelRule>) => void;
+  onOutros: (patch: Partial<ChannelRule>) => void;
+
   onShopeeTier: (idx: number, patch: Partial<ShopeeTier>) => void;
   regime: Regime;
+
+
 }) {
   const [tab, setTab] = useState<ChannelKey>("magalu");
 
-  const current = tab === "magalu" ? props.magalu : tab === "meli" ? props.meli : props.shopee;
-  const onChange = tab === "magalu" ? props.onMagalu : tab === "meli" ? props.onMeli : props.onShopee;
+  const current =
+  tab === "magalu" ? props.magalu :
+  tab === "meli" ? props.meli :
+  tab === "shopee" ? props.shopee :
+  tab === "site" ? props.site :
+  props.outros;
+
+const onChange =
+  tab === "magalu" ? props.onMagalu :
+  tab === "meli" ? props.onMeli :
+  tab === "shopee" ? props.onShopee :
+  tab === "site" ? props.onSite :
+  props.onOutros;
+
 
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
@@ -552,6 +607,13 @@ function ChannelTabs(props: {
           <TabBtn active={tab === "shopee"} onClick={() => setTab("shopee")}>
             Shopee
           </TabBtn>
+          <TabBtn active={tab === "site"} onClick={() => setTab("site")}>
+  Site
+</TabBtn>
+<TabBtn active={tab === "outros"} onClick={() => setTab("outros")}>
+  Outros
+</TabBtn>
+
         </div>
       </div>
 
