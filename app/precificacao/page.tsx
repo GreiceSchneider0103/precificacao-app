@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-type ChannelKey = "magalu" | "meli" | "shopee";
+type ChannelKey = string;
 type Regime = "simples" | "normal";
 type MoneyMode = "percent" | "fixed";
 
@@ -56,6 +56,20 @@ const DRAFT_KEY = "markup_precificacao_draft_v1";
 function normalizeSku(s: string) {
   return (s || "").trim().toUpperCase();
 }
+
+const CHANNEL_LABEL: Record<string, string> = {
+  magalu: "Magalu",
+  meli: "Mercado Livre",
+  shopee: "Shopee",
+  site: "Site",
+  amazon: "Amazon",
+  loja_fisica: "Loja Física",
+};
+
+function channelLabel(key: string) {
+  return CHANNEL_LABEL[key] || key; // fallback: mostra a chave mesmo
+}
+
 
 function parseNumberPt(raw: unknown) {
   const cleaned = String(raw ?? "")
@@ -519,6 +533,19 @@ function showToast(type: "ok" | "err", text: string) {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+useEffect(() => {
+  if (!settings) return;
+
+  const keys = Object.keys(settings.channels || {});
+  if (!keys.length) return;
+
+  // se o canal atual não existir mais, escolhe o primeiro disponível
+  if (!settings.channels[channel]) {
+    setChannel(keys[0] as ChannelKey);
+    setMargemDirty(false);
+  }
+}, [settings, channel]);
+
 
   const filteredProducts = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -952,17 +979,20 @@ function showToast(type: "ok" | "err", text: string) {
               <label className="grid gap-1">
                 <span className="text-xs text-white/60">Canal</span>
                 <select
-                  value={channel}
-                  onChange={(e) => {
-                    setChannel(e.target.value as ChannelKey);
-                    setMargemDirty(false); // ✅ ao trocar canal, volta a usar a margem do preset
-                  }}
-                  className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60"
-                >
-                  <option value="magalu">Magalu</option>
-                  <option value="meli">Mercado Livre</option>
-                  <option value="shopee">Shopee</option>
-                </select>
+  value={channel}
+  onChange={(e) => {
+    setChannel(e.target.value as ChannelKey);
+    setMargemDirty(false);
+  }}
+  className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60"
+>
+  {Object.keys(settings?.channels || {}).map((k) => (
+    <option key={k} value={k}>
+      {channelLabel(k)}
+    </option>
+  ))}
+</select>
+
               </label>
 
               <label className="grid gap-1">
