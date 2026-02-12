@@ -26,7 +26,7 @@ export default async function RootLayout({
           <Header isLoggedIn={isLoggedIn} userName={userName} />
           <main className="mt-8">{children}</main>
           <footer className="mt-10 border-t theme-footer pt-6 text-xs">
-            Markup • MVP local
+            Markup
           </footer>
         </div>
       </body>
