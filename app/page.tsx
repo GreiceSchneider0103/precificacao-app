@@ -63,7 +63,7 @@ export default async function HomePage() {
             <div className="mt-4 grid gap-2">
               <GoogleButton />
               <p className="text-xs text-white/50">
-                (Precisa configurar GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET)
+              
               </p>
             </div>
           </div>
