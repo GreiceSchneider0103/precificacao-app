@@ -39,11 +39,12 @@ export default async function MinhaContaPage() {
 
   return (
     <MinhaContaClient
-      initialName={user.name ?? ""}
-      email={user.email}
-      initialPhone=""                 // ✅ não existe no banco ainda
-      initialImage={user.image ?? null}
-      hasPassword={!!user.passwordHash}
-    />
+  initialName={user.name ?? ""}
+  email={user.email ?? ""}
+  initialPhone=""
+  initialImage={user.image ?? null}
+  hasPassword={!!user.passwordHash}
+/>
+
   );
 }
