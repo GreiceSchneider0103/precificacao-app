@@ -21,7 +21,7 @@ type ChannelRule = {
   creditFretePercent: number; // % sobre frete
   creditCommissionPercent: number; // % sobre comissão
 
-  // ✅ NOVO: Margem alvo por canal
+  // Margem alvo por canal
   targetMarginPercent: number; // % (margem esperada)
 
   // especiais
@@ -35,7 +35,7 @@ type ChannelRule = {
     tiers: ShopeeTier[];
   };
 
-  // NOVO: flag para Full Magalu (desativa crédito de frete)
+  // flag para Full Magalu (desativa crédito de frete)
   isFull?: boolean;
 };
 
@@ -59,7 +59,6 @@ type SettingsStore = {
 const STORAGE_SETTINGS_RULESETS = "markup_settings_rulesets_v1";
 
 function uuid() {
-  // simples e suficiente pro localStorage
   return crypto?.randomUUID?.() ?? `id_${Math.random().toString(16).slice(2)}_${Date.now()}`;
 }
 
@@ -83,7 +82,6 @@ function clamp(n: number, min: number, max: number) {
 function defaultRuleSet(name = "Regra Padrão", regime: Regime = "simples"): RuleSet {
   const now = new Date().toISOString();
 
-  // ✅ Shopee (conforme tabela que você enviou)
   const shopeeTiers: ShopeeTier[] = [
     { min: 0, max: 79.99, commissionPercent: 20, taxFixed: 4 },
     { min: 80, max: 99.99, commissionPercent: 14, taxFixed: 16 },
@@ -92,10 +90,7 @@ function defaultRuleSet(name = "Regra Padrão", regime: Regime = "simples"): Rul
     { min: 500, max: null, commissionPercent: 14, taxFixed: 26 },
   ];
 
-  // ✅ Créditos ativos por padrão APENAS se Regime Normal
   const hasCreditsDefault = regime === "normal";
-
-  // ✅ Imposto padrão por regime (fixo como você pediu)
   const defaultMainTax = regime === "normal" ? 18 : 14;
 
   return {
@@ -113,8 +108,8 @@ function defaultRuleSet(name = "Regra Padrão", regime: Regime = "simples"): Rul
         hasCredits: hasCreditsDefault,
         creditFretePercent: 21.25,
         creditCommissionPercent: 9.25,
-        targetMarginPercent: 20, // ✅ NOVO
-        isFull: false, // NOVO: padrão = envio próprio
+        targetMarginPercent: 20,
+        isFull: false,
       },
       meli: {
         commissionPercent: 11.5,
@@ -123,7 +118,7 @@ function defaultRuleSet(name = "Regra Padrão", regime: Regime = "simples"): Rul
         hasCredits: hasCreditsDefault,
         creditFretePercent: 21.25,
         creditCommissionPercent: 9.25,
-        targetMarginPercent: 20, // ✅ NOVO
+        targetMarginPercent: 20,
         meli: {
           classicCommissionPercent: 11.5,
           premiumCommissionPercent: 16.5,
@@ -136,32 +131,77 @@ function defaultRuleSet(name = "Regra Padrão", regime: Regime = "simples"): Rul
         hasCredits: hasCreditsDefault,
         creditFretePercent: 21.25,
         creditCommissionPercent: 9.25,
-        targetMarginPercent: 20, // ✅ NOVO
+        targetMarginPercent: 20,
         shopee: {
           mode: "tiered",
           tiers: shopeeTiers,
         },
       },
-site: {
-  commissionPercent: 2,     // ajuste depois como quiser
-  taxFixed: 0,
-  mainTaxPercent: defaultMainTax,
-  hasCredits: hasCreditsDefault,
-  creditFretePercent: 21.25,
-  creditCommissionPercent: 9.25,
-  targetMarginPercent: 20,
-},
-outros: {
-  commissionPercent: 20,     // ajuste depois como quiser
-  taxFixed: 0,
-  mainTaxPercent: defaultMainTax,
-  hasCredits: hasCreditsDefault,
-  creditFretePercent: 21.25,
-  creditCommissionPercent: 9.25,
-  targetMarginPercent: 20,
+      site: {
+        commissionPercent: 2,
+        taxFixed: 0,
+        mainTaxPercent: defaultMainTax,
+        hasCredits: hasCreditsDefault,
+        creditFretePercent: 21.25,
+        creditCommissionPercent: 9.25,
+        targetMarginPercent: 20,
+      },
+      outros: {
+        commissionPercent: 20,
+        taxFixed: 0,
+        mainTaxPercent: defaultMainTax,
+        hasCredits: hasCreditsDefault,
+        creditFretePercent: 21.25,
+        creditCommissionPercent: 9.25,
+        targetMarginPercent: 20,
+      },
+    },
+  };
 }
 
-    },
+/**
+ * ✅ MIGRAÇÃO/VALIDAÇÃO: garante que regras antigas tenham os novos canais e campos mínimos
+ * Isso evita crash ao clicar em "Site" e "Outros".
+ */
+function ensureRuleSetComplete(rule: RuleSet): RuleSet {
+  const base = defaultRuleSet(rule.name || "Regra", rule.regime || "simples");
+
+  const mergedChannels: Record<ChannelKey, ChannelRule> = {
+    magalu: { ...base.channels.magalu, ...(rule.channels as any)?.magalu },
+    meli: { ...base.channels.meli, ...(rule.channels as any)?.meli },
+    shopee: { ...base.channels.shopee, ...(rule.channels as any)?.shopee },
+    site: { ...base.channels.site, ...(rule.channels as any)?.site },
+    outros: { ...base.channels.outros, ...(rule.channels as any)?.outros },
+  };
+
+  // garante sub-objetos do MELI
+  if (mergedChannels.meli.meli) {
+    mergedChannels.meli.meli = {
+      ...base.channels.meli.meli!,
+      ...mergedChannels.meli.meli,
+    };
+  } else {
+    mergedChannels.meli.meli = { ...base.channels.meli.meli! };
+  }
+
+  // garante sub-objetos da SHOPEE
+  if (mergedChannels.shopee.shopee) {
+    mergedChannels.shopee.shopee = {
+      ...base.channels.shopee.shopee!,
+      ...mergedChannels.shopee.shopee,
+      tiers:
+        mergedChannels.shopee.shopee.mode === "tiered"
+          ? (mergedChannels.shopee.shopee.tiers?.length ? mergedChannels.shopee.shopee.tiers : base.channels.shopee.shopee!.tiers)
+          : mergedChannels.shopee.shopee.tiers ?? base.channels.shopee.shopee!.tiers,
+    };
+  } else {
+    mergedChannels.shopee.shopee = { ...base.channels.shopee.shopee! };
+  }
+
+  return {
+    ...base,
+    ...rule,
+    channels: mergedChannels,
   };
 }
 
@@ -178,8 +218,17 @@ export default function ConfiguracoesPage() {
       const raw = localStorage.getItem(STORAGE_SETTINGS_RULESETS);
       if (raw) {
         const parsed = JSON.parse(raw) as SettingsStore;
+
         if (parsed?.ruleSets?.length) {
-          setStore(parsed);
+          // ✅ MIGRA: completa/migra regras antigas (inclui site/outros)
+          const migratedRules = parsed.ruleSets.map((r) => ensureRuleSetComplete(r));
+          const activeExists = migratedRules.some((r) => r.id === parsed.activeRuleId);
+          const next: SettingsStore = {
+            activeRuleId: activeExists ? parsed.activeRuleId : migratedRules[0].id,
+            ruleSets: migratedRules,
+          };
+          setStore(next);
+          localStorage.setItem(STORAGE_SETTINGS_RULESETS, JSON.stringify(next));
           return;
         }
       }
@@ -212,7 +261,6 @@ export default function ConfiguracoesPage() {
   function createRule() {
     if (!store) return;
     const name = (newRuleName || "").trim() || `Regra ${store.ruleSets.length + 1}`;
-    // ✅ Nova regra começa com Regime Simples (créditos inativos)
     const rule = defaultRuleSet(name, "simples");
     const next: SettingsStore = { activeRuleId: rule.id, ruleSets: [rule, ...store.ruleSets] };
     persist(next);
@@ -231,13 +279,12 @@ export default function ConfiguracoesPage() {
       createdAt: now,
       updatedAt: now,
     };
-    persist({ activeRuleId: copy.id, ruleSets: [copy, ...store.ruleSets] });
+    persist({ activeRuleId: copy.id, ruleSets: [ensureRuleSetComplete(copy), ...store.ruleSets] });
   }
 
   function deleteRule(id: string) {
     if (!store) return;
 
-    // ✅ Não permite excluir se for a única regra restante
     if (store.ruleSets.length === 1) {
       alert("Você precisa ter pelo menos uma regra ativa.");
       return;
@@ -269,60 +316,53 @@ export default function ConfiguracoesPage() {
     if (!store || !activeRule) return;
     const now = new Date().toISOString();
 
-    // ✅ Se mudou o regime, ajusta créditos e imposto automaticamente (sem perder campos dos canais)
     let finalPatch = { ...patch };
 
+    // ✅ Se mudou regime: aplica hasCredits e imposto para TODOS os canais existentes (inclui site/outros)
     if (patch.regime && patch.regime !== activeRule.regime) {
       const newHasCredits = patch.regime === "normal";
       const newMainTax = patch.regime === "normal" ? 18 : 14;
 
-      finalPatch.channels = {
-  magalu: {
-    ...activeRule.channels.magalu,
-    hasCredits: newHasCredits,
-    mainTaxPercent: newMainTax,
-  },
-  meli: {
-    ...activeRule.channels.meli,
-    hasCredits: newHasCredits,
-    mainTaxPercent: newMainTax,
-  },
-  shopee: {
-    ...activeRule.channels.shopee,
-    hasCredits: newHasCredits,
-    mainTaxPercent: newMainTax,
-  },
-  site: {
-    ...(activeRule.channels as any).site,
-    hasCredits: newHasCredits,
-    mainTaxPercent: newMainTax,
-  },
-  outros: {
-    ...(activeRule.channels as any).outros,
-    hasCredits: newHasCredits,
-    mainTaxPercent: newMainTax,
-  },
-};
+      const completed = ensureRuleSetComplete(activeRule);
+      const nextChannels = (Object.keys(completed.channels) as ChannelKey[]).reduce((acc, k) => {
+        acc[k] = {
+          ...completed.channels[k],
+          hasCredits: newHasCredits,
+          mainTaxPercent: newMainTax,
+        };
+        return acc;
+      }, {} as Record<ChannelKey, ChannelRule>);
 
+      finalPatch = {
+        ...finalPatch,
+        channels: nextChannels,
+      };
     }
 
-    const nextRules = store.ruleSets.map((r) => (r.id === activeRule.id ? { ...r, ...finalPatch, updatedAt: now } : r));
+    const nextRules = store.ruleSets.map((r) =>
+      r.id === activeRule.id ? ensureRuleSetComplete({ ...r, ...finalPatch, updatedAt: now } as RuleSet) : ensureRuleSetComplete(r)
+    );
     persist({ ...store, ruleSets: nextRules });
   }
 
   function updateChannel(channel: ChannelKey, patch: Partial<ChannelRule>) {
     if (!activeRule) return;
+
+    const safe = ensureRuleSetComplete(activeRule);
+
     updateActive({
       channels: {
-        ...activeRule.channels,
-        [channel]: { ...activeRule.channels[channel], ...patch },
+        ...safe.channels,
+        [channel]: { ...safe.channels[channel], ...patch },
       },
     });
   }
 
   function updateShopeeTier(idx: number, patch: Partial<ShopeeTier>) {
     if (!activeRule) return;
-    const ch = activeRule.channels.shopee;
+
+    const safe = ensureRuleSetComplete(activeRule);
+    const ch = safe.channels.shopee;
     const sh = ch.shopee;
     if (!sh) return;
 
@@ -343,9 +383,14 @@ export default function ConfiguracoesPage() {
     );
   }
 
-  const chMagalu = activeRule.channels.magalu;
-  const chMeli = activeRule.channels.meli;
-  const chShopee = activeRule.channels.shopee;
+  // ✅ garante que a regra ativa sempre está completa antes de usar
+  const safeActive = ensureRuleSetComplete(activeRule);
+
+  const chMagalu = safeActive.channels.magalu;
+  const chMeli = safeActive.channels.meli;
+  const chShopee = safeActive.channels.shopee;
+  const chSite = safeActive.channels.site;
+  const chOutros = safeActive.channels.outros;
 
   return (
     <div className="space-y-5">
@@ -414,41 +459,41 @@ export default function ConfiguracoesPage() {
 
             <div className="mt-4 grid gap-2">
               {store.ruleSets.map((r) => {
-                const isActive = r.id === store.activeRuleId;
+                const rr = ensureRuleSetComplete(r);
+                const isActive = rr.id === store.activeRuleId;
                 return (
                   <div
-                    key={r.id}
+                    key={rr.id}
                     className={
-                      "rounded-2xl border p-3 " +
-                      (isActive ? "border-blue-500/30 bg-blue-500/10" : "border-white/10 bg-neutral-950/20")
+                      "rounded-2xl border p-3 " + (isActive ? "border-blue-500/30 bg-blue-500/10" : "border-white/10 bg-neutral-950/20")
                     }
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <button type="button" onClick={() => setActiveRule(r.id)} className="text-left" title="Selecionar regra">
-                        <p className="text-sm font-semibold text-white">{r.name}</p>
+                      <button type="button" onClick={() => setActiveRule(rr.id)} className="text-left" title="Selecionar regra">
+                        <p className="text-sm font-semibold text-white">{rr.name}</p>
                         <p className="mt-1 text-xs text-white/60">
-                          Regime: <b>{r.regime === "normal" ? "Normal" : "Simples"}</b> • UF: <b>{r.ufOrigem}</b>
+                          Regime: <b>{rr.regime === "normal" ? "Normal" : "Simples"}</b> • UF: <b>{rr.ufOrigem}</b>
                         </p>
                       </button>
 
                       <div className="flex gap-2">
                         <button
                           type="button"
-                          onClick={() => startRename(r)}
+                          onClick={() => startRename(rr)}
                           className="rounded-xl bg-white/5 px-2 py-1 text-xs text-white/70 ring-1 ring-white/10 hover:bg-white/10"
                         >
                           Renomear
                         </button>
                         <button
                           type="button"
-                          onClick={() => duplicateRule(r.id)}
+                          onClick={() => duplicateRule(rr.id)}
                           className="rounded-xl bg-white/5 px-2 py-1 text-xs text-white/70 ring-1 ring-white/10 hover:bg-white/10"
                         >
                           Duplicar
                         </button>
                         <button
                           type="button"
-                          onClick={() => deleteRule(r.id)}
+                          onClick={() => deleteRule(rr.id)}
                           className="rounded-xl bg-red-600/15 px-2 py-1 text-xs text-red-100 ring-1 ring-red-500/20 hover:bg-red-600/20"
                         >
                           Excluir
@@ -485,7 +530,7 @@ export default function ConfiguracoesPage() {
                       type="button"
                       onClick={() => updateActive({ regime: "simples" })}
                       className={
-                        activeRule.regime === "simples"
+                        safeActive.regime === "simples"
                           ? "rounded-xl bg-white/15 px-3 py-2 text-xs font-semibold ring-1 ring-white/10"
                           : "rounded-xl bg-white/5 px-3 py-2 text-xs font-semibold text-white/70 ring-1 ring-white/10 hover:bg-white/10"
                       }
@@ -496,7 +541,7 @@ export default function ConfiguracoesPage() {
                       type="button"
                       onClick={() => updateActive({ regime: "normal" })}
                       className={
-                        activeRule.regime === "normal"
+                        safeActive.regime === "normal"
                           ? "rounded-xl bg-white/15 px-3 py-2 text-xs font-semibold ring-1 ring-white/10"
                           : "rounded-xl bg-white/5 px-3 py-2 text-xs font-semibold text-white/70 ring-1 ring-white/10 hover:bg-white/10"
                       }
@@ -516,7 +561,7 @@ export default function ConfiguracoesPage() {
                 <div className="rounded-xl border border-white/10 bg-white/5 p-4">
                   <p className="text-xs text-white/60">UF de origem</p>
                   <select
-                    value={activeRule.ufOrigem}
+                    value={safeActive.ufOrigem}
                     onChange={(e) => updateActive({ ufOrigem: e.target.value })}
                     className="mt-3 h-10 w-full rounded-xl bg-neutral-950/60 px-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60"
                   >
@@ -534,20 +579,19 @@ export default function ConfiguracoesPage() {
 
             {/* Tabs por canal */}
             <ChannelTabs
-  magalu={chMagalu}
-  meli={chMeli}
-  shopee={chShopee}
-  site={activeRule.channels.site}
-  outros={activeRule.channels.outros}
-  onMagalu={(patch) => updateChannel("magalu", patch)}
-  onMeli={(patch) => updateChannel("meli", patch)}
-  onShopee={(patch) => updateChannel("shopee", patch)}
-  onSite={(patch) => updateChannel("site", patch)}
-  onOutros={(patch) => updateChannel("outros", patch)}
-  onShopeeTier={(idx, patch) => updateShopeeTier(idx, patch)}
-  regime={activeRule.regime}
-/>
-
+              magalu={chMagalu}
+              meli={chMeli}
+              shopee={chShopee}
+              site={chSite}
+              outros={chOutros}
+              onMagalu={(patch) => updateChannel("magalu", patch)}
+              onMeli={(patch) => updateChannel("meli", patch)}
+              onShopee={(patch) => updateChannel("shopee", patch)}
+              onSite={(patch) => updateChannel("site", patch)}
+              onOutros={(patch) => updateChannel("outros", patch)}
+              onShopeeTier={(idx, patch) => updateShopeeTier(idx, patch)}
+              regime={safeActive.regime}
+            />
           </div>
         </div>
       </section>
@@ -572,32 +616,37 @@ function ChannelTabs(props: {
 
   onShopeeTier: (idx: number, patch: Partial<ShopeeTier>) => void;
   regime: Regime;
-
-
 }) {
   const [tab, setTab] = useState<ChannelKey>("magalu");
 
   const current =
-  tab === "magalu" ? props.magalu :
-  tab === "meli" ? props.meli :
-  tab === "shopee" ? props.shopee :
-  tab === "site" ? props.site :
-  props.outros;
+    tab === "magalu"
+      ? props.magalu
+      : tab === "meli"
+      ? props.meli
+      : tab === "shopee"
+      ? props.shopee
+      : tab === "site"
+      ? props.site
+      : props.outros;
 
-const onChange =
-  tab === "magalu" ? props.onMagalu :
-  tab === "meli" ? props.onMeli :
-  tab === "shopee" ? props.onShopee :
-  tab === "site" ? props.onSite :
-  props.onOutros;
-
+  const onChange =
+    tab === "magalu"
+      ? props.onMagalu
+      : tab === "meli"
+      ? props.onMeli
+      : tab === "shopee"
+      ? props.onShopee
+      : tab === "site"
+      ? props.onSite
+      : props.onOutros;
 
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-semibold">Parâmetros por canal (regra ativa)</p>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <TabBtn active={tab === "magalu"} onClick={() => setTab("magalu")}>
             Magalu
           </TabBtn>
@@ -608,12 +657,11 @@ const onChange =
             Shopee
           </TabBtn>
           <TabBtn active={tab === "site"} onClick={() => setTab("site")}>
-  Site
-</TabBtn>
-<TabBtn active={tab === "outros"} onClick={() => setTab("outros")}>
-  Outros
-</TabBtn>
-
+            Site
+          </TabBtn>
+          <TabBtn active={tab === "outros"} onClick={() => setTab("outros")}>
+            Outros
+          </TabBtn>
         </div>
       </div>
 
@@ -718,7 +766,9 @@ const onChange =
                   ))}
                 </div>
               ) : (
-                <p className="mt-2 text-[11px] text-white/50">No modo fixo, use os campos "Comissão (%)" e "Taxa fixa (R$)" abaixo.</p>
+                <p className="mt-2 text-[11px] text-white/50">
+                  No modo fixo, use os campos "Comissão (%)" e "Taxa fixa (R$)" abaixo.
+                </p>
               )}
 
               <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-[11px] text-amber-100">
