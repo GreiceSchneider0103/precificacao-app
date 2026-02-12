@@ -19,27 +19,27 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         password: { label: "Senha", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
+  const email = String(credentials?.email ?? "");
+  const password = String(credentials?.password ?? "");
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
-        });
+  if (!email || !password) return null;
 
-        if (!user || !user.passwordHash) return null;
+  const user = await prisma.user.findUnique({
+    where: { email },
+  });
 
-        const passwordMatch = await compare(
-          credentials.password,
-          user.passwordHash
-        );
+  if (!user || !user.passwordHash) return null;
 
-        if (!passwordMatch) return null;
+  const passwordMatch = await compare(password, user.passwordHash);
+  if (!passwordMatch) return null;
 
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-        };
-      },
+  return {
+    id: user.id,
+    email: user.email ?? "", // como no schema é String?, evita null
+    name: user.name ?? "",
+  };
+}
+
     }),
 
     Google({
