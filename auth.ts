@@ -8,13 +8,18 @@ import bcrypt from "bcryptjs";
 
 export const { auth, handlers, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
+  
+  // ⭐ MUDANÇA CRÍTICA: JWT → DATABASE
+  // Isso faz o cookie ter só ~100 bytes em vez de 4KB+
   session: {
-    strategy: "jwt",
+    strategy: "database", // ← ESTA LINHA RESOLVE O ERRO 494
     maxAge: 30 * 24 * 60 * 60, // 30 dias
   },
+  
   pages: {
     signIn: "/",
   },
+  
   providers: [
     Credentials({
       name: "credentials",
@@ -73,21 +78,19 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
       allowDangerousEmailAccountLinking: true,
     }),
   ],
+  
+  // Com database sessions, os callbacks mudam:
   callbacks: {
-  async jwt({ token, user }) {
-    // Só guarda o mínimo
-    if (user) {
-      token.id = (user as any).id;
-      token.name = user.name;
-      token.email = user.email;
-    }
-    return token;
-  },
-  async session({ session, token }) {
-    // Passa só o id pro client
-    (session.user as any).id = token.id as string;
-    return session;
+    // async jwt() não é mais necessário com database sessions
+    
+    async session({ session, user }) {
+      // 'user' vem direto do banco quando strategy = "database"
+      if (session.user) {
+        (session.user as any).id = user.id;
+      }
+      return session;
     },
   },
+  
   debug: process.env.NODE_ENV === "development",
 });
