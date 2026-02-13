@@ -74,21 +74,19 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user, trigger }) {
-      if (user) {
-        token.id = user.id;
-        token.email = user.email;
-        token.name = user.name;
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      if (session.user && token) {
-        session.user.id = token.id as string;
-        session.user.email = token.email as string;
-        session.user.name = token.name as string;
-      }
-      return session;
+  async jwt({ token, user }) {
+    // Só guarda o mínimo
+    if (user) {
+      token.id = (user as any).id;
+      token.name = user.name;
+      token.email = user.email;
+    }
+    return token;
+  },
+  async session({ session, token }) {
+    // Passa só o id pro client
+    (session.user as any).id = token.id as string;
+    return session;
     },
   },
   debug: process.env.NODE_ENV === "development",

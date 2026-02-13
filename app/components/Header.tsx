@@ -20,7 +20,8 @@ type Props = {
 
 export function Header({ isLoggedIn, userName }: Props) {
   return (
-    <header className="flex items-center justify-between">
+        <header className="flex items-center justify-between py-4">
+
       {/* Logo */}
       <Link href="/" className="flex items-center gap-3">
         <div className="h-9 w-9 rounded-xl theme-logo grid place-items-center">

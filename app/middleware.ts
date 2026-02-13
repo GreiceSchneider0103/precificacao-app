@@ -20,8 +20,14 @@ export default auth((req) => {
   if (!needsAuth) return;
 
   if (!req.auth) {
+    // evita loop: se já está na home, não redireciona
+    if (pathname === "/") return;
+
     const url = new URL("/", nextUrl.origin);
+
+    // evita "next" crescer infinitamente
     url.searchParams.set("next", pathname);
+
     return Response.redirect(url);
   }
 });

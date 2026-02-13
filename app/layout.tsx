@@ -27,21 +27,22 @@ export default async function RootLayout({
   const session = await auth();
 
   return (
-    <html lang="pt-BR">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-neutral-950 text-white min-h-screen`}
-      >
-        {session?.user && (
-  <Header 
-    isLoggedIn={true}
-    userName={session.user.name}
-  />
-)}
-        
-        <main className="mx-auto max-w-6xl px-4 py-8">
-          {children}
-        </main>
-      </body>
-    </html>
-  );
+  <html lang="pt-BR">
+    <body
+      className={`${geistSans.variable} ${geistMono.variable} antialiased bg-neutral-950 text-white min-h-screen`}
+    >
+      {/* ✅ HEADER com container e espaçamento */}
+      {session?.user && (
+        <div className="mx-auto max-w-6xl px-4 pt-6">
+          <Header isLoggedIn={true} userName={session.user.name} />
+        </div>
+      )}
+
+      {/* ✅ CONTEÚDO com o mesmo container */}
+      <main className="mx-auto max-w-6xl px-4 py-8">
+        {children}
+      </main>
+    </body>
+  </html>
+);
 }
