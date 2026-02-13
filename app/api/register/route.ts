@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
-import { prisma } from "../../../lib/prisma";
 import bcrypt from "bcryptjs";
+import { prisma } from "@/lib/prisma";
+
+export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const name = (body?.name ?? "").toString().trim();
-    const email = (body?.email ?? "").toString().trim().toLowerCase();
-    const password = (body?.password ?? "").toString();
+    const name = String(body?.name ?? "").trim();
+    const email = String(body?.email ?? "").trim().toLowerCase();
+    const password = String(body?.password ?? "");
 
     if (!email || !password) {
       return NextResponse.json({ ok: false, error: "Email e senha são obrigatórios." }, { status: 400 });
@@ -22,6 +24,7 @@ export async function POST(req: Request) {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
+
     await prisma.user.create({
       data: {
         name: name || null,
@@ -30,8 +33,12 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true }, { status: 201 });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: "Erro ao cadastrar." }, { status: 500 });
+    console.error("❌ /api/register error:", e?.message, e);
+    return NextResponse.json(
+      { ok: false, error: e?.message || "Erro ao cadastrar." },
+      { status: 500 }
+    );
   }
 }

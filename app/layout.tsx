@@ -1,11 +1,22 @@
-import "./globals.css";
 import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
+import "./globals.css";
 import { auth } from "@/auth";
-import { Header } from "./components/Header";
+import { Header } from "@/app/components/Header";
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
 
 export const metadata: Metadata = {
-  title: "Markup",
-  description: "Precificação Inteligente para Marketplaces.",
+  title: "Markup - Precificação Inteligente",
+  description: "Sistema de precificação para marketplaces",
 };
 
 export default async function RootLayout({
@@ -14,21 +25,22 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const session = await auth();
-  const isLoggedIn = !!session?.user;
-
-  const userName =
-    (session?.user as { name?: string | null } | undefined)?.name ?? undefined;
 
   return (
-    <html lang="pt-BR" className="dark" data-theme="dark">
-      <body className="min-h-screen">
-        <div className="mx-auto max-w-6xl px-6 py-6">
-          <Header isLoggedIn={isLoggedIn} userName={userName} />
-          <main className="mt-8">{children}</main>
-          <footer className="mt-10 border-t theme-footer pt-6 text-xs">
-            Markup
-          </footer>
-        </div>
+    <html lang="pt-BR">
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-neutral-950 text-white min-h-screen`}
+      >
+        {session?.user && (
+  <Header 
+    isLoggedIn={true}
+    userName={session.user.name}
+  />
+)}
+        
+        <main className="mx-auto max-w-6xl px-4 py-8">
+          {children}
+        </main>
       </body>
     </html>
   );
