@@ -6,24 +6,24 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
 model User {
   id            String    @id @default(cuid())
   name          String?
   email         String?   @unique
   emailVerified DateTime?
   image         String?
+  phone         String?
   passwordHash  String?
-
   accounts      Account[]
   sessions      Session[]
-
-  // ✅ OPOSTOS DAS RELAÇÕES (era isso que faltava)
-  products      Product[]
-  ruleSets      RuleSet[]
-  priceHistory  PriceHistory[]
-
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+
+  settings      UserSettings?
+  products      Product[]
+  promotions    Promotion[]
+  history       PricingHistory[]
 }
 
 model Account {
@@ -43,7 +43,6 @@ model Account {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
-  @@index([userId])
 }
 
 model Session {
@@ -53,8 +52,6 @@ model Session {
   expires      DateTime
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
 }
 
 model VerificationToken {
@@ -65,9 +62,16 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-/* =========================
-   ✅ DADOS POR CONTA (SEM VAZAR)
-   ========================= */
+model UserSettings {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  activeRuleId String
+  rulesJson    String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
 
 model Product {
   id        String   @id @default(cuid())
@@ -76,43 +80,50 @@ model Product {
   name      String
   cmv       Float
   mlb       String?
-  updatedAt DateTime @updatedAt
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, sku])     // ✅ mesmo SKU pode existir em outro usuário, mas não no mesmo
-  @@index([userId])
-  @@index([sku])
-}
-
-model RuleSet {
-  id        String   @id @default(cuid())
-  userId    String
-  // você pode usar isso como "ativo", "default", "magalu", etc.
-  key       String
-  data      Json     // ✅ salva todas as configs do canal/regime/tiers em um JSON
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, key])     // ✅ cada usuário tem seus próprios rulesets por chave
+  @@unique([userId, sku])
   @@index([userId])
 }
 
-model PriceHistory {
-  id          String   @id @default(cuid())
-  userId      String
-  sku         String
-  channel     String
-  priceFinal  Float
-  marginPct   Float
-  createdAt   DateTime @default(now())
+model Promotion {
+  id            String   @id @default(cuid())
+  userId        String
+  sku           String
+  name          String
+  channel       String
+  originalPrice Float
+  promoPrice    Float
+  startDate     DateTime
+  endDate       DateTime
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
-  @@index([userId, sku])
+  @@index([userId, isActive])
+  @@index([userId, channel])
+}
+
+model PricingHistory {
+  id             String   @id @default(cuid())
+  userId         String
+  sku            String
+  name           String
+  cmv            Float
+  channel        String
+  suggestedPrice Float
+  finalPrice     Float
+  margin         Float
+  calculatedAt   DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, calculatedAt])
   @@index([userId, channel])
 }
