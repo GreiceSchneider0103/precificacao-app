@@ -6,47 +6,50 @@ import { getOwnedProduct, deleteOwnedProduct } from "@/lib/db/products";
 // 🗑️ DELETE - Deleta apenas se for o dono (Soft Delete)
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> } // 👈 Mude para Promise
 ) {
   try {
+    const { id } = await params; // 👈 Adicione esse await
     const session = await auth();
     const userId = session?.user?.id;
 
     if (!userId) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
 
-    // Tópico C: Só marca como deletado se o ID E o USERID baterem no banco
-    const result = await deleteOwnedProduct(params.id, userId);
+    const result = await deleteOwnedProduct(id, userId); // 👈 Use o id aqui
 
     if (result.count === 0) {
-      return NextResponse.json({ error: "Produto não encontrado ou sem permissão" }, { status: 404 });
+      return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 });
     }
 
-    return NextResponse.json({ message: "Produto removido com sucesso" });
+    return NextResponse.json({ message: "Produto removido" });
   } catch (error) {
     return NextResponse.json({ error: "Erro ao deletar" }, { status: 500 });
   }
 }
 
 // 📝 PATCH - Atualiza apenas se for o dono
+// app/api/products/[id]/route.ts
+
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> } // 👈 Mude para Promise
 ) {
   try {
+    const { id } = await params; // 👈 Adicione esse await
     const session = await auth();
     const userId = session?.user?.id;
     if (!userId) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
 
     const body = await request.json();
     
-    // Tópico C: Primeiro verifica se o produto existe e pertence ao usuário
-    const product = await getOwnedProduct(params.id, userId);
+    // Use o 'id' que você pegou do await params
+    const product = await getOwnedProduct(id, userId); 
     if (!product) {
-      return NextResponse.json({ error: "Produto não encontrado ou acesso negado" }, { status: 403 });
+      return NextResponse.json({ error: "Produto não encontrado" }, { status: 403 });
     }
 
     const updated = await prisma.product.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         name: body.name,
         cmv: body.cmv ? Number(body.cmv) : undefined,
