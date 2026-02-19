@@ -515,3 +515,13 @@ export function sortBy<T>(
     return 0;
   });
 }
+// lib/db/utils.ts
+import { auth } from "@/auth";
+
+export async function getSessionOrThrow() {
+  const session = await auth();
+  if (!session?.user?.id) {
+    throw new Error("Unauthorized");
+  }
+  return session;
+}

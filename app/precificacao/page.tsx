@@ -461,28 +461,29 @@ export default function PrecificacaoPage() {
   useEffect(() => {
     // ✅ Carrega produtos da API
     (async () => {
-      try {
-        const response = await fetch("/api/products");
-        if (!response.ok) {
-          const rawP = localStorage.getItem(STORAGE_PRODUCTS);
-          if (rawP) setProducts(JSON.parse(rawP));
-          return;
-        }
-        const data = await response.json();
-        const parsed = (data.products || data || []) as any[];
-        const next: Product[] = parsed.map((p: any) => ({
-          sku: (p.sku || "").trim().toUpperCase(),
-          name: String(p.name ?? "").trim(),
-          cmv: Number(p.cmv ?? 0) || 0,
-          updatedAt: String(p.updatedAt ?? new Date().toISOString()),
-        }));
-        setProducts(next);
-      } catch (e) {
-        try {
-          const rawP = localStorage.getItem(STORAGE_PRODUCTS);
-          if (rawP) setProducts(JSON.parse(rawP));
-        } catch {}
-      }
+      // 1. Altere a chamada do fetch para evitar cache
+const response = await fetch("/api/products", { cache: "no-store" }); 
+
+if (!response.ok) {
+  const rawP = localStorage.getItem(STORAGE_PRODUCTS);
+  if (rawP) setProducts(JSON.parse(rawP));
+  return;
+}
+
+const data = await response.json();
+// Garante que pegamos a lista independente da estrutura do JSON
+const parsed = (data.products || data || []) as any[];
+
+const next: Product[] = parsed.map((p: any) => ({
+  sku: (p.sku || "").trim().toUpperCase(),
+  name: String(p.name ?? "").trim(),
+  // ✅ Tópico E: Conversão explícita de Decimal(String) para Number
+  // Se você adicionar 'price' ou 'cost' no futuro, faça o mesmo neles
+  cmv: Number(p.cmv ?? 0), 
+  updatedAt: String(p.updatedAt ?? new Date().toISOString()),
+}));
+
+setProducts(next);
     })();
 
     // ✅ carrega cupons/promoções ativos

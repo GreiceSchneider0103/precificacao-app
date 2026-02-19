@@ -1,177 +1,103 @@
+// app/api/products/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { listOwnedProducts } from "@/lib/db/products";
+
+// ✅ Tópico E: Força a API a sempre buscar dados novos, sem cache da Vercel
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 /**
- * GET /api/products
- * 
- * Retorna produtos do usuário logado com CMV > 0 (apenas produtos precificáveis).
- * 
- * Resposta:
- * {
- *   "products": [
- *     {
- *       "sku": "6332817",
- *       "name": "BANQUETA GOLD (KIT INCLUSO) - LINHO PRATA E163 - Kit 2",
- *       "cmv": 273.04,
- *       "mlb": "MLB3147733694",
- *       "updatedAt": "2026-02-16T10:30:00Z"
- *     }
- *   ],
- *   "total": 1,
- *   "filtered": 3
- * }
+ * GET: Lista produtos ativos do usuário logado
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    // ✅ Verificar autenticação
     const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: "Não autenticado" },
-        { status: 401 }
-      );
+    const userId = session?.user?.id;
+
+    if (!userId) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    // ✅ Buscar produtos do usuário com CMV > 0 (apenas produtos precificáveis)
-    const products = await prisma.product.findMany({
-      where: {
-        userId: session.user.id,
-        cmv: {
-          gt: 0,  // ✅ FILTRO: Apenas produtos com CMV maior que 0
-        },
-      },
-      select: {
-        id: true,
-        sku: true,
-        name: true,
-        cmv: true,
-        mlb: true,
-        updatedAt: true,
-        createdAt: true,
-      },
-      orderBy: {
-        updatedAt: "desc",
-      },
+    // ✅ Tópico C: Uso do Helper que isola o usuário e ignora os 'deletedAt'
+    const products = await listOwnedProducts(userId);
+
+    // Contagem para estatísticas do dashboard (opcional)
+    const totalActive = await prisma.product.count({
+      where: { userId, deletedAt: null },
     });
-
-    // 📊 Contar total de produtos (incluindo os sem CMV) para estatística
-    const totalProducts = await prisma.product.count({
-      where: {
-        userId: session.user.id,
-      },
-    });
-
-    const filtered = totalProducts - products.length;
-
-    console.log(
-      `✓ API /api/products: Retornando ${products.length} produtos com CMV > 0 ` +
-      `(${filtered} filtrados) para usuário ${session.user.email}`
-    );
 
     return NextResponse.json({
-      products: products,
-      total: products.length,
-      filtered: filtered,  // Quantos foram filtrados por ter CMV = 0
+      products,
+      total: totalActive,
+      // Retornamos os tipos como número, mas o Prisma cuidará da precisão Decimal no banco
     });
   } catch (error) {
-    console.error("❌ Erro ao buscar produtos:", error);
-    
-    return NextResponse.json(
-      { 
-        error: "Erro ao buscar produtos",
-        details: error instanceof Error ? error.message : "Erro desconhecido"
-      },
-      { status: 500 }
-    );
+    console.error("Erro na API de produtos (GET):", error);
+    return NextResponse.json({ error: "Erro interno ao buscar produtos" }, { status: 500 });
   }
 }
 
 /**
- * POST /api/products
- * 
- * Cria um novo produto.
- * 
- * Body:
- * {
- *   "sku": "ABC123",
- *   "name": "Nome do Produto",
- *   "cmv": 100.00,
- *   "mlb": "MLB123456"  // opcional
- * }
+ * POST: Cria ou restaura um produto
  */
 export async function POST(request: NextRequest) {
   try {
-    // ✅ Verificar autenticação
     const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: "Não autenticado" },
-        { status: 401 }
-      );
+    const userId = session?.user?.id;
+
+    if (!userId) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    // ✅ Validar dados do body
     const body = await request.json();
     const { sku, name, cmv, mlb } = body;
 
+    // Validação básica
     if (!sku || !name || cmv === undefined) {
-      return NextResponse.json(
-        { error: "SKU, nome e CMV são obrigatórios" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Campos obrigatórios ausentes" }, { status: 400 });
     }
 
-    // ⚠️ Avisar se CMV = 0
-    if (Number(cmv) <= 0) {
-      console.warn(`⚠️ Produto ${sku} criado com CMV = 0. Não será listado na precificação até ter CMV > 0.`);
-    }
-
-    // ✅ Verificar se SKU já existe para este usuário
-    const existing = await prisma.product.findFirst({
+    /**
+     * ✅ Tópico A e C: Lógica de Identidade Multi-tenant
+     * Usamos 'upsert' com a chave composta 'userId_sku'.
+     * Se o usuário já teve esse SKU e deletou (soft delete), nós o restauramos (deletedAt: null).
+     */
+    const product = await prisma.product.upsert({
       where: {
-        userId: session.user.id,
-        sku: sku,
+        userId_sku: { 
+          userId: userId, 
+          sku: sku.trim().toUpperCase() 
+        },
       },
-    });
-
-    if (existing) {
-      return NextResponse.json(
-        { error: "Já existe um produto com este SKU" },
-        { status: 409 }
-      );
-    }
-
-    // ✅ Criar produto
-    const product = await prisma.product.create({
-      data: {
-        sku: sku,
-        name: name,
+      update: {
+        name: name.trim(),
         cmv: Number(cmv),
         mlb: mlb || null,
-        userId: session.user.id,
+        deletedAt: null, // ✅ Garante que o produto volte a ser ativo se estava deletado
+        updatedAt: new Date(),
+      },
+      create: {
+        userId: userId,
+        sku: sku.trim().toUpperCase(),
+        name: name.trim(),
+        cmv: Number(cmv),
+        mlb: mlb || null,
       },
     });
 
-    console.log(`✓ Produto criado: ${product.sku} - ${product.name} (CMV: ${product.cmv})`);
+    console.log(`✓ Produto [${product.sku}] processado para o usuário ${userId}`);
 
-    return NextResponse.json(
-      { 
-        message: "Produto criado com sucesso",
-        product: product,
-        warning: product.cmv <= 0 ? "Produto criado com CMV = 0. Não aparecerá na precificação até ter CMV > 0." : null
-      },
-      { status: 201 }
-    );
+    return NextResponse.json(product, { status: 201 });
   } catch (error) {
-    console.error("❌ Erro ao criar produto:", error);
+    console.error("Erro na API de produtos (POST):", error);
     
-    return NextResponse.json(
-      { 
-        error: "Erro ao criar produto",
-        details: error instanceof Error ? error.message : "Erro desconhecido"
-      },
-      { status: 500 }
-    );
+    // Erro de P2002 (Unique constraint) do Prisma caso a chave composta falhe
+    if ((error as any).code === 'P2002') {
+      return NextResponse.json({ error: "Este SKU já está ativo em sua conta." }, { status: 409 });
+    }
+
+    return NextResponse.json({ error: "Erro ao salvar produto" }, { status: 500 });
   }
 }

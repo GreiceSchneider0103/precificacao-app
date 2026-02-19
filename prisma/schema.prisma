@@ -3,9 +3,12 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") // Recomendado para migrações no Supabase
 }
+
+// --- AUTENTICAÇÃO (NextAuth) ---
 
 model User {
   id            String    @id @default(cuid())
@@ -15,15 +18,16 @@ model User {
   image         String?
   phone         String?
   passwordHash  String?
-  accounts      Account[]
-  sessions      Session[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  accounts      Account[]
+  sessions      Session[]
   settings      UserSettings?
   products      Product[]
   promotions    Promotion[]
   history       PricingHistory[]
+  markupRules   MarkupRuleset[]
 }
 
 model Account {
@@ -62,41 +66,63 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+// --- CONFIGURAÇÕES E REGRAS ---
+
 model UserSettings {
   id           String   @id @default(cuid())
   userId       String   @unique
   activeRuleId String
-  rulesJson    String
+  rulesJson    String   // Considerar mudar para Json se possível futuramente
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-model Product {
+model MarkupRuleset {
   id        String   @id @default(cuid())
   userId    String
-  sku       String
   name      String
-  cmv       Float
-  mlb       String?
+  isActive  Boolean  @default(false)
+  data      Json
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, sku])
   @@index([userId])
+  @@map("markup_settings_rulesets_v1") // Mantém o nome da tabela física
 }
+
+// --- PRODUTOS E LOGÍSTICA ---
+
+model Product {
+  id        String    @id @default(cuid())
+  userId    String
+  sku       String
+  name      String
+  cmv       Decimal   @db.Decimal(10, 2) // Troca Float por Decimal
+  mlb       String?   // Referência Mercado Livre
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // Suporte a Soft Delete
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sku]) // Isolamento multi-tenant por SKU
+  @@index([userId, deletedAt]) // Index para performance em listagens "vivas"
+}
+
+// --- NEGÓCIO E PRECIFICAÇÃO ---
 
 model Promotion {
   id            String   @id @default(cuid())
   userId        String
   sku           String
   name          String
-  channel       String
-  originalPrice Float
-  promoPrice    Float
+  channel       String   // Canal de venda (Shopee, ML, etc)
+  originalPrice Decimal  @db.Decimal(10, 2)
+  promoPrice    Decimal  @db.Decimal(10, 2)
   startDate     DateTime
   endDate       DateTime
   isActive      Boolean  @default(true)
@@ -106,7 +132,7 @@ model Promotion {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, isActive])
-  @@index([userId, channel])
+  @@index([userId, channel, sku]) // Busca rápida de promoções por canal/produto
 }
 
 model PricingHistory {
@@ -114,28 +140,16 @@ model PricingHistory {
   userId         String
   sku            String
   name           String
-  cmv            Float
+  cmv            Decimal  @db.Decimal(10, 2)
   channel        String
-  suggestedPrice Float
-  finalPrice     Float
-  margin         Float
+  suggestedPrice Decimal  @db.Decimal(10, 2)
+  finalPrice     Decimal  @db.Decimal(10, 2)
+  margin         Decimal  @db.Decimal(5, 2) // Margem em percentual (ex: 15.50%)
   calculatedAt   DateTime @default(now())
   createdAt      DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, calculatedAt])
-  @@index([userId, channel])
-}
-
-model markup_settings_rulesets_v1 {
-  id        String   @id @default(cuid())
-  userId    String
-  name      String
-  isActive  Boolean  @default(false)
-  data      Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([userId])
+  @@index([userId, sku]) // Rastro de preços por produto
 }

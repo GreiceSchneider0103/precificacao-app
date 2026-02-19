@@ -2,7 +2,8 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 
-const PROTECTED_PREFIXES = [
+// 1. Caminhos que exigem login (UI)
+const PROTECTED_UI_PATHS = [
   "/configuracoes",
   "/precificacao",
   "/historico",
@@ -11,61 +12,59 @@ const PROTECTED_PREFIXES = [
   "/promocoes",
 ];
 
-// ⭐ Cookies antigos para deletar (temporário - remove após 1 semana)
+// 2. Cookies legados para limpeza (evita erro "494 Request Header Too Large")
 const LEGACY_COOKIES = [
-  '__Secure-authjs.session-token',
-  '__Secure-authjs.session-token.0',
-  '__Secure-authjs.session-token.1',
-  '__Secure-authjs.session-token.2',
-  '__Secure-authjs.session-token.3',
-  '__Secure-authjs.callback-url',
   'authjs.session-token',
+  '__Secure-authjs.session-token',
   'authjs.callback-url',
+  '__Secure-authjs.callback-url',
 ];
 
 export default auth((req) => {
   const { nextUrl } = req;
+  const isLoggedIn = !!req.auth;
   const pathname = nextUrl.pathname;
 
-  // Cria response (pode ser redirect ou next)
-  let response: NextResponse | Response | undefined;
+  // --- A. PROTEÇÃO DE API (Tópico C) ---
+  // Bloqueia qualquer chamada para /api/* que não seja autenticação
+  const isApiRoute = pathname.startsWith("/api");
+  const isAuthApiRoute = pathname.startsWith("/api/auth");
 
-  const needsAuth = PROTECTED_PREFIXES.some(
-    (p) => pathname === p || pathname.startsWith(p + "/")
-  );
-
-  if (needsAuth && !req.auth) {
-    // evita loop: se já está na home, não redireciona
-    if (pathname === "/") return;
-
-    const url = new URL("/", nextUrl.origin);
-    url.searchParams.set("next", pathname);
-    response = Response.redirect(url);
-  } else {
-    response = NextResponse.next();
+  if (isApiRoute && !isAuthApiRoute && !isLoggedIn) {
+    return NextResponse.json(
+      { error: "Não autorizado: Sessão inválida ou expirada" },
+      { status: 401 }
+    );
   }
 
-  // ⭐ LIMPEZA DE COOKIES ANTIGOS (previne erro 494)
-  // Remove após 2025-02-20 quando todos usuários tiverem cookies limpos
-  LEGACY_COOKIES.forEach(cookieName => {
+  // --- B. PROTEÇÃO DE UI ---
+  const isProtectedUI = PROTECTED_UI_PATHS.some(path => 
+    pathname === path || pathname.startsWith(path + "/")
+  );
+
+  if (isProtectedUI && !isLoggedIn) {
+    // Redireciona para a home (/) salvando a página que tentou acessar
+    const loginUrl = new URL("/", nextUrl.origin);
+    loginUrl.searchParams.set("callbackUrl", pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  // --- C. LIMPEZA DE COOKIES E CONTINUAÇÃO ---
+  const response = NextResponse.next();
+
+  // Limpa cookies antigos se existirem (previne erros de cabeçalho grande na Vercel)
+  for (const cookieName of LEGACY_COOKIES) {
     if (req.cookies.has(cookieName)) {
-      // Converte Response para NextResponse se necessário
-      if (!(response instanceof NextResponse)) {
-        response = NextResponse.redirect(response!.url);
-      }
-      
-      (response as NextResponse).cookies.delete(cookieName);
-      (response as NextResponse).cookies.set(cookieName, '', {
-        expires: new Date(0),
-        path: '/',
-        maxAge: -1,
-      });
+      response.cookies.delete(cookieName);
+      // Força expiração imediata em todos os caminhos
+      response.cookies.set(cookieName, "", { path: "/", maxAge: -1 });
     }
-  });
+  }
 
   return response;
 });
 
+// Matcher otimizado: ignora arquivos estáticos, imagens e favicon
 export const config = {
-  matcher: ["/((?!_next|favicon.ico|.*\\..*).*)"],
+  matcher: ["/((?!api/auth|_next/static|_next/image|favicon.ico|.*\\..*).*)"],
 };
