@@ -20,6 +20,15 @@ type ShopeeTier = {
   taxFixed: number;
 };
 
+type Coupon = {
+  id: string;
+  name: string;
+  code: string;
+  discountMode: "percent" | "fixed";
+  discountValue: number;
+  isActive: boolean;
+};
+
 type Settings = {
   // ✅ agora settings é o RuleSet ativo vindo de "markup_settings_rulesets_v1"
   regime: Regime;
@@ -108,7 +117,7 @@ function solveWithShopeeTiered(params: Parameters<typeof solvePOR>[0] & { channe
   if (!sh || sh.mode !== "tiered") {
     // fallback: normal
     const r = solvePOR(params);
-    return { ...r, channelUsed: params.channel };
+    return { ...r, channelUsed: params.channel, regimeUsed: params.regime };
   }
 
   let guess = 200;
@@ -126,7 +135,7 @@ function solveWithShopeeTiered(params: Parameters<typeof solvePOR>[0] & { channe
     const newTierKey = `${newTier.min}-${newTier.max}-${newTier.commissionPercent}-${newTier.taxFixed}`;
 
     if (newTierKey === tierKey || newTierKey === lastTierKey) {
-      return { ...r, channelUsed: chUsed };
+      return { ...r, channelUsed: chUsed, regimeUsed: params.regime };
     }
 
     lastTierKey = tierKey;
@@ -137,7 +146,7 @@ function solveWithShopeeTiered(params: Parameters<typeof solvePOR>[0] & { channe
   const tier = pickShopeeTier(sh, guess);
   const chUsed = { ...params.channel, commissionPercent: tier.commissionPercent, taxFixed: tier.taxFixed };
   const r = solvePOR({ ...params, channel: chUsed });
-  return { ...r, channelUsed: chUsed };
+  return { ...r, channelUsed: chUsed, regimeUsed: params.regime };
 }
 
 /**
@@ -168,9 +177,11 @@ function solvePOR(params: {
   };
 
   regime: Regime;
-
+  
   rebateMode: MoneyMode;
   rebateValue: number;
+  descontoMode: MoneyMode;
+  descontoValue: number;
 }) {
   const {
     cmv,
@@ -189,7 +200,8 @@ function solvePOR(params: {
 
   const m = clamp(margemAlvoPercent / 100, 0, 0.95);
 
-  const POR = (() => {
+  // Solve for POR_pago (preço efetivamente pago pelo cliente após cupom)
+  const porPago = (() => {
     const c = channel.commissionPercent / 100;
     const t = channel.mainTaxPercent / 100;
 
@@ -204,27 +216,16 @@ function solvePOR(params: {
 
     const fixedCosts = channel.taxFixed + frete + cmv + operFixed + adsFixed;
 
-    const credFrete =
-      regime === "normal" && channel.hasCredits ? frete * (channel.creditFretePercent / 100) : 0;
+    const credFrete = regime === "normal" && channel.hasCredits ? frete * (channel.creditFretePercent / 100) : 0;
 
     const credComissaoCoeff =
-      regime === "normal" && channel.hasCredits
-        ? c * (channel.creditCommissionPercent / 100)
-        : 0;
+      regime === "normal" && channel.hasCredits ? c * (channel.creditCommissionPercent / 100) : 0;
 
     const rebateFixed = rebateMode === "fixed" ? rebateValue : 0;
     const rebateCoeff = rebateMode === "percent" ? rebateValue / 100 : 0;
 
     const leftCoeff =
-      1 -
-      c -
-      t -
-      pisCoeff -
-      operCoeff -
-      adsCoeff +
-      credComissaoCoeff +
-      rebateCoeff -
-      m;
+      1 - c - t - pisCoeff - operCoeff - adsCoeff + credComissaoCoeff + rebateCoeff - m;
 
     const right = fixedCosts - credFrete - rebateFixed;
 
@@ -232,25 +233,23 @@ function solvePOR(params: {
     return right / leftCoeff;
   })();
 
-  const comissaoVal = POR * (channel.commissionPercent / 100);
-  const impostoVal = POR * (channel.mainTaxPercent / 100);
-  const pisVal = regime === "normal" ? 0.0925 * (POR - impostoVal) : 0;
+  // Now porPago is the effective paid price. Compute breakdown over porPago.
+  const comissaoVal = porPago * (channel.commissionPercent / 100);
+  const impostoVal = porPago * (channel.mainTaxPercent / 100);
+  const pisVal = regime === "normal" ? 0.0925 * (porPago - impostoVal) : 0;
 
-  const operR$ = operMode === "percent" ? POR * (operValue / 100) : operValue;
-  const adsR$ = adsMode === "percent" ? POR * (adsValue / 100) : adsValue;
+  const operR$ = operMode === "percent" ? porPago * (operValue / 100) : operValue;
+  const adsR$ = adsMode === "percent" ? porPago * (adsValue / 100) : adsValue;
 
-  const credFrete =
-    regime === "normal" && channel.hasCredits ? frete * (channel.creditFretePercent / 100) : 0;
+  const credFrete = regime === "normal" && channel.hasCredits ? frete * (channel.creditFretePercent / 100) : 0;
 
   const credComissao =
-    regime === "normal" && channel.hasCredits
-      ? comissaoVal * (channel.creditCommissionPercent / 100)
-      : 0;
+    regime === "normal" && channel.hasCredits ? comissaoVal * (channel.creditCommissionPercent / 100) : 0;
 
-  const rebateVal = rebateMode === "percent" ? POR * (rebateValue / 100) : rebateValue;
+  const rebateVal = rebateMode === "percent" ? porPago * (rebateValue / 100) : rebateValue;
 
   const mc =
-    POR -
+    porPago -
     comissaoVal -
     impostoVal -
     pisVal -
@@ -263,16 +262,26 @@ function solvePOR(params: {
     credComissao +
     rebateVal;
 
-  const mcPct = POR > 0 ? (mc / POR) * 100 : 0;
+  const mcPct = porPago > 0 ? (mc / porPago) * 100 : 0;
 
-  const receitaLiquida = POR - comissaoVal - impostoVal - pisVal - channel.taxFixed;
+  const receitaLiquida = porPago - comissaoVal - impostoVal - pisVal - channel.taxFixed;
 
   const precoDE = cmv * markupBase;
-  const descontoNecessarioPct = precoDE > 0 ? (1 - POR / precoDE) * 100 : 0;
-  const descontoNecessarioR$ = precoDE - POR;
+
+  // Convert porPago -> porLista (preço publicado) by inverting the discount
+  let porLista = porPago;
+  if (params.descontoMode === "percent") {
+    const pct = params.descontoValue / 100;
+    porLista = pct >= 1 ? porPago : porPago / (1 - pct);
+  } else {
+    porLista = porPago + params.descontoValue;
+  }
+
+  const descontoNecessarioPct = precoDE > 0 ? (1 - porLista / precoDE) * 100 : 0;
+  const descontoNecessarioR$ = precoDE - porLista;
 
   return {
-    POR_sugerido: POR,
+    POR_sugerido: porLista,
     precoDE,
     descontoNecessarioPct,
     descontoNecessarioR$,
@@ -307,6 +316,53 @@ function useDebouncedDraftSaver(delayMs: number) {
   };
 }
 
+function mapRuleSetToSettings(rs: any): Settings {
+  const base = rs || {};
+  const regime: Regime = base.regime === "simples" ? "simples" : "normal";
+  const mainTax = regime === "normal" ? 18 : 14;
+
+  const keys: ChannelKey[] = ["magalu", "meli", "shopee", "site", "outros"];
+  const channels: Record<ChannelKey, any> = {} as any;
+
+  for (const k of keys) {
+    const incoming = (base.channels && base.channels[k]) || {};
+    const isMarketplace = k !== "site";
+    const defaultHasCredits = isMarketplace ? true : false;
+    const defaultCreditFrete = isMarketplace ? 21.25 : 0;
+    const defaultCreditCommission = isMarketplace ? 9.25 : 0;
+
+    channels[k] = {
+      commissionPercent: typeof incoming.commissionPercent === "number" ? incoming.commissionPercent : Number(incoming.commissionPercent ?? 0),
+      taxFixed: typeof incoming.taxFixed === "number" ? incoming.taxFixed : Number(incoming.taxFixed ?? 0),
+      mainTaxPercent: typeof incoming.mainTaxPercent === "number" ? incoming.mainTaxPercent : mainTax,
+      hasCredits: typeof incoming.hasCredits === "boolean" ? incoming.hasCredits : defaultHasCredits,
+      creditFretePercent: typeof incoming.creditFretePercent === "number" ? incoming.creditFretePercent : Number(incoming.creditFretePercent ?? defaultCreditFrete),
+      creditCommissionPercent: typeof incoming.creditCommissionPercent === "number" ? incoming.creditCommissionPercent : Number(incoming.creditCommissionPercent ?? defaultCreditCommission),
+      targetMarginPercent: typeof incoming.targetMarginPercent === "number" ? incoming.targetMarginPercent : Number(incoming.targetMarginPercent ?? 10),
+    };
+
+    // attach meli/preset inside the channel object for compatibility
+    if (k === "meli") {
+      channels[k].meli = {
+        classicCommissionPercent: base.meli?.classicCommissionPercent ?? 11.5,
+        premiumCommissionPercent: base.meli?.premiumCommissionPercent ?? 16.5,
+      };
+    }
+
+    // attach shopee tiers under channel.shopee
+    if (k === "shopee") {
+      const tiers = Array.isArray(base.shopeeTiers) ? base.shopeeTiers : [];
+      channels[k].shopee = { mode: tiers.length ? "tiered" : "flat", tiers };
+    }
+  }
+
+  return {
+    regime,
+    ufOrigem: base.ufOrigem ?? "RS",
+    channels,
+  } as Settings;
+}
+
 /* ---------------- UI HELPERS ---------------- */
 
 function InfoTip({ text }: { text: string }) {
@@ -324,6 +380,8 @@ function InfoTip({ text }: { text: string }) {
 export default function PrecificacaoPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [selectedCouponId, setSelectedCouponId] = useState<string | null>(null);
 
   const [toast, setToast] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
@@ -403,16 +461,52 @@ function showToast(type: "ok" | "err", text: string) {
       if (rawP) setProducts(JSON.parse(rawP));
     } catch {}
 
-    // ✅ carrega o RuleSet ativo
-    try {
-      const rawS = localStorage.getItem("markup_settings_rulesets_v1");
-      if (rawS) {
-        const store = JSON.parse(rawS);
-        const active =
-          store?.ruleSets?.find((r: any) => r.id === store.activeRuleId) || store?.ruleSets?.[0];
-        if (active) setSettings(active);
+    // ✅ carrega cupons/promoções ativos
+    (async () => {
+      try {
+        const res = await fetch('/api/promotions');
+        if (res.ok) {
+          const json = await res.json();
+          const list = Array.isArray(json?.promotions) ? json.promotions : [];
+          setCoupons(list.filter((p: any) => p.isActive));
+        }
+      } catch (err) {
+        console.error("Erro ao carregar cupons", err);
       }
-    } catch {}
+    })();
+
+    // ✅ carrega o RuleSet ativo via API (fallback para localStorage antiga)
+    (async () => {
+      try {
+        const res = await fetch('/api/settings/rulesets');
+        if (res.ok) {
+          const json = await res.json();
+          const list = Array.isArray(json?.rulesets) ? json.rulesets : [];
+          const active = list.find((r: any) => r.isActive) || list[0] || null;
+          if (active) {
+            const raw = active.data ? active.data : active;
+            setSettings(mapRuleSetToSettings(raw));
+          }
+        } else {
+          // fallback para localStorage (compatibilidade)
+          const rawS = localStorage.getItem('markup_settings_rulesets_v1');
+          if (rawS) {
+            const store = JSON.parse(rawS);
+            const active = store?.ruleSets?.find((r: any) => r.id === store.activeRuleId) || store?.ruleSets?.[0];
+            if (active) setSettings(active);
+          }
+        }
+      } catch (err) {
+        try {
+          const rawS = localStorage.getItem('markup_settings_rulesets_v1');
+          if (rawS) {
+            const store = JSON.parse(rawS);
+            const active = store?.ruleSets?.find((r: any) => r.id === store.activeRuleId) || store?.ruleSets?.[0];
+            if (active) setSettings(active);
+          }
+        } catch {}
+      }
+    })();
 
     // Draft (UX forte)
     try {
@@ -444,6 +538,8 @@ function showToast(type: "ok" | "err", text: string) {
       if (d.descontoMode) setDescontoMode(d.descontoMode);
       if (d.descontoValue != null) setDescontoValue(String(d.descontoValue));
 
+      if (d.selectedCouponId != null) setSelectedCouponId(String(d.selectedCouponId));
+
       if (d.rebateMode) setRebateMode(d.rebateMode);
       if (d.rebateValue != null) setRebateValue(String(d.rebateValue));
 
@@ -457,6 +553,21 @@ function showToast(type: "ok" | "err", text: string) {
       console.error("Erro ao carregar draft de precificação", err);
     }
   }, []);
+
+  // ✅ quando cupom é selecionado, aplica automaticamente ao desconto
+  useEffect(() => {
+    if (selectedCouponId) {
+      const selected = coupons.find((c) => c.id === selectedCouponId);
+      if (selected) {
+        setDescontoMode(selected.discountMode);
+        setDescontoValue(
+          selected.discountMode === "percent"
+            ? String(selected.discountValue)
+            : String(selected.discountValue).replace(".", ",")
+        );
+      }
+    }
+  }, [selectedCouponId, coupons]);
 
   // ===== Draft autosave (debounced)
   const saveDraftDebounced = useDebouncedDraftSaver(250);
@@ -478,6 +589,7 @@ function showToast(type: "ok" | "err", text: string) {
       adsValue,
       descontoMode,
       descontoValue,
+      selectedCouponId,
       rebateMode,
       rebateValue,
       commissionOverride,
@@ -504,6 +616,7 @@ function showToast(type: "ok" | "err", text: string) {
     adsValue,
     descontoMode,
     descontoValue,
+    selectedCouponId,
     rebateMode,
     rebateValue,
     commissionOverride,
@@ -618,6 +731,7 @@ useEffect(() => {
     const freteN = parseNumberPt(frete);
     const operValueN = parseNumberPt(operValue);
     const adsValueN = parseNumberPt(adsValue);
+    const descontoValueN = parseNumberPt(descontoValue);
 
     // ✅ margem: se usuário digitou, usa; senão usa targetMarginPercent do canal
     const margemTyped = parseNumberPt(margem);
@@ -656,6 +770,8 @@ useEffect(() => {
         regime: regimeFinal,
         rebateMode,
         rebateValue: rebateValueN,
+        descontoMode,
+        descontoValue: descontoValueN,
       });
 
       return { ...rTier, regimeUsed: regimeFinal };
@@ -675,6 +791,8 @@ useEffect(() => {
       regime: regimeFinal,
       rebateMode,
       rebateValue: rebateValueN,
+      descontoMode,
+      descontoValue: descontoValueN,
     });
 
     return { ...r, channelUsed: ch, regimeUsed: regimeFinal };
@@ -692,6 +810,8 @@ useEffect(() => {
     margem,
     margemDirty,
     regimeOverride,
+    descontoMode,
+    descontoValue,
     rebateMode,
     rebateValue,
     commissionOverride,
@@ -1209,9 +1329,33 @@ useEffect(() => {
                 <div className="rounded-xl border border-white/10 bg-white/5 p-4">
                   <p className="text-sm font-semibold">
                     Desconto/Cupom
-                    <InfoTip text="Simulação: aplica desconto no DE e calcula margem resultante." />
+                    <InfoTip text="Selecione um cupom da lista ou digite um valor manualmente." />
                   </p>
-                  <div className="mt-3 flex gap-2">
+
+                  {/* Lista de cupons */}
+                  {coupons.length > 0 && (
+                    <div className="mt-3 grid gap-2">
+                      <label className="text-xs text-white/60">Cupons disponíveis</label>
+                      <select
+                        value={selectedCouponId || ""}
+                        onChange={(e) => {
+                          const id = e.target.value || null;
+                          setSelectedCouponId(id);
+                        }}
+                        className="rounded-xl bg-neutral-950/60 px-3 py-2 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60"
+                      >
+                        <option value="">— Sem cupom —</option>
+                        {coupons.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} ({c.code}) - {c.discountMode === "percent" ? `${c.discountValue}%` : `R$ ${fmtPt(c.discountValue)}`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <p className="mt-3 text-xs text-white/60">Ou digite um valor manual</p>
+                  <div className="mt-2 flex gap-2">
                     <button
                       type="button"
                       onClick={() => setDescontoMode("percent")}
@@ -1238,7 +1382,10 @@ useEffect(() => {
 
                   <input
                     value={descontoValue}
-                    onChange={(e) => setDescontoValue(e.target.value)}
+                    onChange={(e) => {
+                      setDescontoValue(e.target.value);
+                      setSelectedCouponId(null); // limpa seleção ao digitar manualmente
+                    }}
                     inputMode="decimal"
                     placeholder={descontoMode === "percent" ? "ex: 10" : "ex: 25,00"}
                     className="mt-3 w-full rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60"

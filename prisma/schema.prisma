@@ -127,3 +127,15 @@ model PricingHistory {
   @@index([userId, calculatedAt])
   @@index([userId, channel])
 }
+
+model markup_settings_rulesets_v1 {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  isActive  Boolean  @default(false)
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}

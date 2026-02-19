@@ -1,35 +1,81 @@
-import { Session } from 'next-auth';
-import { User } from 'next-auth'; // Adjust the import based on your User type definition
-// Function to validate email using regex pattern
-const isValidEmail = (email: string): boolean => {
-    const regex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    return regex.test(email);
-};
+import NextAuth from "next-auth";
+import Credentials from "next-auth/providers/credentials";
+import { PrismaAdapter } from "@auth/prisma-adapter";
+import { prisma } from "@/lib/prisma"; // ajuste o path
+import { compare } from "bcryptjs"; // se você usa bcrypt
 
-// Updated authorize callback with improved error handling
-const authorize = async (credentials: Record<string, string>): Promise<User | null> => {
-    const { email, password } = credentials;
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  adapter: PrismaAdapter(prisma),
 
-    if (!isValidEmail(email)) {
-        throw new Error('Invalid email format');
-    }
+  // ✅ IMPORTANTE: Com Credentials provider, PRECISA usar JWT
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 dias
+  },
 
-    try {
-        const user = await findUserByEmail(email); // Your logic to find a user
-        if (!user) {
-            throw new Error('No user found with this email');
-        }
-        // Logic for password hashing and comparison (remains the same)
-        const isMatch = await verifyPassword(password, user.password);
-        if (!isMatch) {
-            throw new Error('Password does not match');
-        }
-        return user;  // Assuming user is properly typed
-    } catch (error) {
-        console.error('Authorization error:', error);
-        throw new Error('Authorization failed');
-    }
-};
+  jwt: {
+    maxAge: 30 * 24 * 60 * 60, // 30 dias
+  },
 
-// Export your functions as needed
-export { authorize, isValidEmail };
+  providers: [
+    Credentials({
+      name: "credentials",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Senha", type: "password" },
+      },
+      async authorize(credentials) {
+        const email = String(credentials?.email || "").toLowerCase().trim();
+        const password = String(credentials?.password || "");
+
+        if (!email || !password) return null;
+
+        const user = await prisma.user.findUnique({ where: { email } });
+        if (!user || !user.passwordHash) return null;
+
+        const ok = await compare(password, user.passwordHash);
+        if (!ok) return null;
+
+        // ✅ retorno mínimo - apenas id e email no JWT
+        return { 
+          id: user.id, 
+          email: user.email,
+          name: user.name ?? ""
+        };
+      },
+    }),
+  ],
+
+  callbacks: {
+    // ✅ mantém JWT compacto - apenas id e email
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+        token.email = user.email;
+      }
+      return token;
+    },
+
+    // ✅ adiciona dados à sessão do cliente
+    async session({ session, token }) {
+      if (session.user) {
+        (session.user as any).id = token.id;
+        // ensure email is always a string to satisfy TypeScript and prevent undefined assignments
+        session.user.email = String((token as any)?.email ?? "");
+      }
+      return session;
+    },
+  },
+
+  // ✅ importante ter secret fixo
+  secret: process.env.AUTH_SECRET,
+
+  debug: process.env.NODE_ENV === "development",
+  
+  // ✅ desabilitamos eventos de rastreamento que podem aumentar tamanho
+  pages: {
+    signIn: "/signin",
+    error: "/auth/error",
+  },
+});
+
