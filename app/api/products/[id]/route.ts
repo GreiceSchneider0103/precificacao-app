@@ -3,49 +3,46 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getOwnedProduct, deleteOwnedProduct } from "@/lib/db/products";
 
-// 🗑️ DELETE - Deleta apenas se for o dono (Soft Delete)
+// 🗑️ DELETE - Next.js 15/16 exige Promise para params
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> } // 👈 Mude para Promise
+  { params }: { params: Promise<{ id: string }> } // 👈 Tipagem correta
 ) {
   try {
-    const { id } = await params; // 👈 Adicione esse await
+    const { id } = await params; // 👈 OBRIGATÓRIO dar await no params
     const session = await auth();
     const userId = session?.user?.id;
 
     if (!userId) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
 
-    const result = await deleteOwnedProduct(id, userId); // 👈 Use o id aqui
+    const result = await deleteOwnedProduct(id, userId);
 
     if (result.count === 0) {
-      return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 });
+      return NextResponse.json({ error: "Produto não encontrado ou sem permissão" }, { status: 404 });
     }
 
-    return NextResponse.json({ message: "Produto removido" });
+    return NextResponse.json({ message: "Produto removido com sucesso" });
   } catch (error) {
     return NextResponse.json({ error: "Erro ao deletar" }, { status: 500 });
   }
 }
 
-// 📝 PATCH - Atualiza apenas se for o dono
-// app/api/products/[id]/route.ts
-
+// 📝 PATCH - Next.js 15/16 exige Promise para params
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> } // 👈 Mude para Promise
+  { params }: { params: Promise<{ id: string }> } // 👈 Tipagem correta
 ) {
   try {
-    const { id } = await params; // 👈 Adicione esse await
+    const { id } = await params; // 👈 OBRIGATÓRIO dar await no params
     const session = await auth();
     const userId = session?.user?.id;
     if (!userId) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
 
     const body = await request.json();
     
-    // Use o 'id' que você pegou do await params
-    const product = await getOwnedProduct(id, userId); 
+    const product = await getOwnedProduct(id, userId);
     if (!product) {
-      return NextResponse.json({ error: "Produto não encontrado" }, { status: 403 });
+      return NextResponse.json({ error: "Produto não encontrado ou acesso negado" }, { status: 403 });
     }
 
     const updated = await prisma.product.update({
