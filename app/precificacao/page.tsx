@@ -456,10 +456,31 @@ function showToast(type: "ok" | "err", text: string) {
 
   // ===== Load base data + draft
   useEffect(() => {
-    try {
-      const rawP = localStorage.getItem(STORAGE_PRODUCTS);
-      if (rawP) setProducts(JSON.parse(rawP));
-    } catch {}
+    // ✅ Carrega produtos da API
+    (async () => {
+      try {
+        const response = await fetch("/api/products");
+        if (!response.ok) {
+          const rawP = localStorage.getItem(STORAGE_PRODUCTS);
+          if (rawP) setProducts(JSON.parse(rawP));
+          return;
+        }
+        const data = await response.json();
+        const parsed = (data.products || data || []) as any[];
+        const next: Product[] = parsed.map((p: any) => ({
+          sku: (p.sku || "").trim().toUpperCase(),
+          name: String(p.name ?? "").trim(),
+          cmv: Number(p.cmv ?? 0) || 0,
+          updatedAt: String(p.updatedAt ?? new Date().toISOString()),
+        }));
+        setProducts(next);
+      } catch (e) {
+        try {
+          const rawP = localStorage.getItem(STORAGE_PRODUCTS);
+          if (rawP) setProducts(JSON.parse(rawP));
+        } catch {}
+      }
+    })();
 
     // ✅ carrega cupons/promoções ativos
     (async () => {
