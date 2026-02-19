@@ -3,46 +3,45 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getOwnedProduct, deleteOwnedProduct } from "@/lib/db/products";
 
-// 🗑️ DELETE - Next.js 15/16 exige Promise para params
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> } // 👈 Tipagem correta
-) {
+// ✅ TIPAGEM PARA NEXT.JS 15/16
+type RouteContext = {
+  params: Promise<{ id: string }>;
+};
+
+// 🗑️ DELETE
+export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
-    const { id } = await params; // 👈 OBRIGATÓRIO dar await no params
+    const { id } = await context.params; // OBRIGATÓRIO dar await
     const session = await auth();
     const userId = session?.user?.id;
 
-    if (!userId) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    if (!userId) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
     const result = await deleteOwnedProduct(id, userId);
 
     if (result.count === 0) {
-      return NextResponse.json({ error: "Produto não encontrado ou sem permissão" }, { status: 404 });
+      return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 });
     }
 
-    return NextResponse.json({ message: "Produto removido com sucesso" });
+    return NextResponse.json({ message: "Removido com sucesso" });
   } catch (error) {
-    return NextResponse.json({ error: "Erro ao deletar" }, { status: 500 });
+    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }
 
-// 📝 PATCH - Next.js 15/16 exige Promise para params
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> } // 👈 Tipagem correta
-) {
+// 📝 PATCH
+export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
-    const { id } = await params; // 👈 OBRIGATÓRIO dar await no params
+    const { id } = await context.params; // OBRIGATÓRIO dar await
     const session = await auth();
     const userId = session?.user?.id;
-    if (!userId) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    if (!userId) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
     const body = await request.json();
     
     const product = await getOwnedProduct(id, userId);
     if (!product) {
-      return NextResponse.json({ error: "Produto não encontrado ou acesso negado" }, { status: 403 });
+      return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
     }
 
     const updated = await prisma.product.update({
