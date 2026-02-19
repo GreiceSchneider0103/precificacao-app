@@ -79,7 +79,6 @@ function channelLabel(key: string) {
   return CHANNEL_LABEL[key] || key; // fallback: mostra a chave mesmo
 }
 
-
 function parseNumberPt(raw: unknown) {
   const cleaned = String(raw ?? "")
     .trim()
@@ -177,7 +176,7 @@ function solvePOR(params: {
   };
 
   regime: Regime;
-  
+
   rebateMode: MoneyMode;
   rebateValue: number;
   descontoMode: MoneyMode;
@@ -224,8 +223,7 @@ function solvePOR(params: {
     const rebateFixed = rebateMode === "fixed" ? rebateValue : 0;
     const rebateCoeff = rebateMode === "percent" ? rebateValue / 100 : 0;
 
-    const leftCoeff =
-      1 - c - t - pisCoeff - operCoeff - adsCoeff + credComissaoCoeff + rebateCoeff - m;
+    const leftCoeff = 1 - c - t - pisCoeff - operCoeff - adsCoeff + credComissaoCoeff + rebateCoeff - m;
 
     const right = fixedCosts - credFrete - rebateFixed;
 
@@ -332,13 +330,19 @@ function mapRuleSetToSettings(rs: any): Settings {
     const defaultCreditCommission = isMarketplace ? 9.25 : 0;
 
     channels[k] = {
-      commissionPercent: typeof incoming.commissionPercent === "number" ? incoming.commissionPercent : Number(incoming.commissionPercent ?? 0),
+      commissionPercent:
+        typeof incoming.commissionPercent === "number" ? incoming.commissionPercent : Number(incoming.commissionPercent ?? 0),
       taxFixed: typeof incoming.taxFixed === "number" ? incoming.taxFixed : Number(incoming.taxFixed ?? 0),
       mainTaxPercent: typeof incoming.mainTaxPercent === "number" ? incoming.mainTaxPercent : mainTax,
       hasCredits: typeof incoming.hasCredits === "boolean" ? incoming.hasCredits : defaultHasCredits,
-      creditFretePercent: typeof incoming.creditFretePercent === "number" ? incoming.creditFretePercent : Number(incoming.creditFretePercent ?? defaultCreditFrete),
-      creditCommissionPercent: typeof incoming.creditCommissionPercent === "number" ? incoming.creditCommissionPercent : Number(incoming.creditCommissionPercent ?? defaultCreditCommission),
-      targetMarginPercent: typeof incoming.targetMarginPercent === "number" ? incoming.targetMarginPercent : Number(incoming.targetMarginPercent ?? 10),
+      creditFretePercent:
+        typeof incoming.creditFretePercent === "number" ? incoming.creditFretePercent : Number(incoming.creditFretePercent ?? defaultCreditFrete),
+      creditCommissionPercent:
+        typeof incoming.creditCommissionPercent === "number"
+          ? incoming.creditCommissionPercent
+          : Number(incoming.creditCommissionPercent ?? defaultCreditCommission),
+      targetMarginPercent:
+        typeof incoming.targetMarginPercent === "number" ? incoming.targetMarginPercent : Number(incoming.targetMarginPercent ?? 10),
     };
 
     // attach meli/preset inside the channel object for compatibility
@@ -385,11 +389,10 @@ export default function PrecificacaoPage() {
 
   const [toast, setToast] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
-function showToast(type: "ok" | "err", text: string) {
-  setToast({ type, text });
-  window.setTimeout(() => setToast(null), 1600);
-}
-
+  function showToast(type: "ok" | "err", text: string) {
+    setToast({ type, text });
+    window.setTimeout(() => setToast(null), 1600);
+  }
 
   // meta (margem) por canal: quando user digitar, trava (dirty)
   const [margemDirty, setMargemDirty] = useState(false);
@@ -485,7 +488,7 @@ function showToast(type: "ok" | "err", text: string) {
     // ✅ carrega cupons/promoções ativos
     (async () => {
       try {
-        const res = await fetch('/api/promotions');
+        const res = await fetch("/api/promotions");
         if (res.ok) {
           const json = await res.json();
           const list = Array.isArray(json?.promotions) ? json.promotions : [];
@@ -499,7 +502,7 @@ function showToast(type: "ok" | "err", text: string) {
     // ✅ carrega o RuleSet ativo via API (fallback para localStorage antiga)
     (async () => {
       try {
-        const res = await fetch('/api/settings/rulesets');
+        const res = await fetch("/api/settings/rulesets");
         if (res.ok) {
           const json = await res.json();
           const list = Array.isArray(json?.rulesets) ? json.rulesets : [];
@@ -510,7 +513,7 @@ function showToast(type: "ok" | "err", text: string) {
           }
         } else {
           // fallback para localStorage (compatibilidade)
-          const rawS = localStorage.getItem('markup_settings_rulesets_v1');
+          const rawS = localStorage.getItem("markup_settings_rulesets_v1");
           if (rawS) {
             const store = JSON.parse(rawS);
             const active = store?.ruleSets?.find((r: any) => r.id === store.activeRuleId) || store?.ruleSets?.[0];
@@ -519,7 +522,7 @@ function showToast(type: "ok" | "err", text: string) {
         }
       } catch (err) {
         try {
-          const rawS = localStorage.getItem('markup_settings_rulesets_v1');
+          const rawS = localStorage.getItem("markup_settings_rulesets_v1");
           if (rawS) {
             const store = JSON.parse(rawS);
             const active = store?.ruleSets?.find((r: any) => r.id === store.activeRuleId) || store?.ruleSets?.[0];
@@ -582,9 +585,7 @@ function showToast(type: "ok" | "err", text: string) {
       if (selected) {
         setDescontoMode(selected.discountMode);
         setDescontoValue(
-          selected.discountMode === "percent"
-            ? String(selected.discountValue)
-            : String(selected.discountValue).replace(".", ",")
+          selected.discountMode === "percent" ? String(selected.discountValue) : String(selected.discountValue).replace(".", ",")
         );
       }
     }
@@ -627,7 +628,7 @@ function showToast(type: "ok" | "err", text: string) {
     manualCmv,
     channel,
     meliMode,
-    magaluShipMode, // ✅ faltava
+    magaluShipMode,
     regimeOverride,
     frete,
     margem,
@@ -659,7 +660,6 @@ function showToast(type: "ok" | "err", text: string) {
       const isTextArea = tag === "textarea";
       if (isTextArea) return;
 
-      // evita submit fantasma
       e.preventDefault();
       setRecalcTick((v) => v + 1);
     };
@@ -667,19 +667,18 @@ function showToast(type: "ok" | "err", text: string) {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
-useEffect(() => {
-  if (!settings) return;
 
-  const keys = Object.keys(settings.channels || {});
-  if (!keys.length) return;
+  useEffect(() => {
+    if (!settings) return;
 
-  // se o canal atual não existir mais, escolhe o primeiro disponível
-  if (!settings.channels[channel]) {
-    setChannel(keys[0] as ChannelKey);
-    setMargemDirty(false);
-  }
-}, [settings, channel]);
+    const keys = Object.keys(settings.channels || {});
+    if (!keys.length) return;
 
+    if (!settings.channels[channel]) {
+      setChannel(keys[0] as ChannelKey);
+      setMargemDirty(false);
+    }
+  }, [settings, channel]);
 
   const filteredProducts = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -710,7 +709,6 @@ useEffect(() => {
     const baseCh = settings.channels[channel];
     const regimeFinal: Regime = regimeOverride === "default" ? settings.regime : regimeOverride;
 
-    // ✅ imposto: se "default" usa o preset do canal; se override de regime, usa 18/14; se override preenchido, usa override
     const mainTaxPercent = (() => {
       if (taxOverride.trim()) return parseNumberPt(taxOverride);
       if (regimeOverride === "default") return baseCh.mainTaxPercent;
@@ -721,10 +719,7 @@ useEffect(() => {
     let commissionPercent = baseCh.commissionPercent;
 
     if (channel === "meli" && baseCh.meli) {
-      commissionPercent =
-        meliMode === "premium"
-          ? baseCh.meli.premiumCommissionPercent
-          : baseCh.meli.classicCommissionPercent;
+      commissionPercent = meliMode === "premium" ? baseCh.meli.premiumCommissionPercent : baseCh.meli.classicCommissionPercent;
     }
 
     // ✅ taxa fixa padrão do canal
@@ -737,13 +732,13 @@ useEffect(() => {
     // Créditos: respeita preset, mas no regime simples não aplica mesmo (o cálculo já trava)
     const hasCredits = baseCh.hasCredits;
 
-    // Crédito de frete (%): se Magalu FULL, nunca credita frete
     const creditFretePercentBase = creditFreteOverride.trim()
       ? parseNumberPt(creditFreteOverride)
       : baseCh.creditFretePercent;
 
-    const creditFretePercent = creditFretePercentBase;
-
+    // ✅ Magalu Full: zera crédito de frete
+    const creditFretePercent =
+      channel === "magalu" && magaluShipMode === "full" ? 0 : creditFretePercentBase;
 
     const creditCommissionPercent = creditComissaoOverride.trim()
       ? parseNumberPt(creditComissaoOverride)
@@ -757,11 +752,10 @@ useEffect(() => {
     // ✅ margem: se usuário digitou, usa; senão usa targetMarginPercent do canal
     const margemTyped = parseNumberPt(margem);
     const margemDefault = settings.channels[channel]?.targetMarginPercent ?? 20;
-    const margemN = margemDirty ? margemTyped : (margemTyped || margemDefault);
+    const margemN = margemDirty ? margemTyped : margemTyped || margemDefault;
 
     const rebateValueN = parseNumberPt(rebateValue);
 
-    // channel base efetivo (sem shopee tiered ainda)
     const ch = {
       commissionPercent,
       taxFixed,
@@ -771,10 +765,8 @@ useEffect(() => {
       creditCommissionPercent,
     };
 
-    // ✅ se Shopee tiered e sem override de comissão/taxa fixa => iterar faixa
     const shopeeNoOverride = !commissionOverride.trim() && !fixedOverride.trim();
-    const shouldTierShopee =
-      channel === "shopee" && shopeeNoOverride && baseCh.shopee?.mode === "tiered";
+    const shouldTierShopee = channel === "shopee" && shopeeNoOverride && baseCh.shopee?.mode === "tiered";
 
     if (shouldTierShopee) {
       const rTier = solveWithShopeeTiered({
@@ -787,7 +779,7 @@ useEffect(() => {
         adsValue: adsValueN,
         margemAlvoPercent: margemN,
         channel: ch,
-        channelRaw: baseCh, // contém tiers
+        channelRaw: baseCh,
         regime: regimeFinal,
         rebateMode,
         rebateValue: rebateValueN,
@@ -798,7 +790,6 @@ useEffect(() => {
       return { ...rTier, regimeUsed: regimeFinal };
     }
 
-    // normal
     const r = solvePOR({
       cmv: effectiveCmv,
       markupBase,
@@ -840,7 +831,7 @@ useEffect(() => {
     fixedOverride,
     creditFreteOverride,
     creditComissaoOverride,
-    recalcTick, // ✅ força recompute no Enter
+    recalcTick,
   ]);
 
   // Simulação: se aplicar desconto em cima do DE, qual POR pago e qual margem fica?
@@ -862,16 +853,12 @@ useEffect(() => {
     const impostoVal = porPago * (ch.mainTaxPercent / 100);
     const pisVal = regime === "normal" ? 0.0925 * (porPago - impostoVal) : 0;
 
-    const operR$ =
-      operMode === "percent" ? porPago * (parseNumberPt(operValue) / 100) : parseNumberPt(operValue);
-    const adsR$ =
-      adsMode === "percent" ? porPago * (parseNumberPt(adsValue) / 100) : parseNumberPt(adsValue);
+    const operR$ = operMode === "percent" ? porPago * (parseNumberPt(operValue) / 100) : parseNumberPt(operValue);
+    const adsR$ = adsMode === "percent" ? porPago * (parseNumberPt(adsValue) / 100) : parseNumberPt(adsValue);
 
-    const credFrete =
-      regime === "normal" && ch.hasCredits ? parseNumberPt(frete) * (ch.creditFretePercent / 100) : 0;
+    const credFrete = regime === "normal" && ch.hasCredits ? parseNumberPt(frete) * (ch.creditFretePercent / 100) : 0;
 
-    const credComissao =
-      regime === "normal" && ch.hasCredits ? cVal * (ch.creditCommissionPercent / 100) : 0;
+    const credComissao = regime === "normal" && ch.hasCredits ? cVal * (ch.creditCommissionPercent / 100) : 0;
 
     const rebateVal =
       rebateMode === "percent" ? porPago * (parseNumberPt(rebateValue) / 100) : parseNumberPt(rebateValue);
@@ -911,11 +898,9 @@ useEffect(() => {
     if (!result) return [];
     const list: { type: "warn" | "bad"; text: string }[] = [];
 
-    // ✅ alvo real: o que está no campo (já vem do preset se não for dirty)
     const alvo = parseNumberPt(margem) || 0;
     const mc = result.breakdown.margemPct;
 
-    // tolerância p/ arredondamento
     const EPS = 0.01;
 
     if (mc < 0) list.push({ type: "bad", text: "Prejuízo: margem negativa." });
@@ -972,7 +957,6 @@ useEffect(() => {
       return true;
     } catch {
       if (!quiet) showToast("err", "Falha ao salvar histórico.");
-
       return false;
     }
   }
@@ -983,10 +967,8 @@ useEffect(() => {
     setManualName("");
     setManualCmv("");
 
-    // volta a usar preset do canal
     setMargemDirty(false);
 
-    // limpa campos de simulação/ajuste rápido
     setDescontoValue("0");
     setRebateValue("0");
 
@@ -996,20 +978,17 @@ useEffect(() => {
     setCreditFreteOverride("");
     setCreditComissaoOverride("");
 
-    // força recalcular (e também atualiza a margem do preset pelo effect)
     setRecalcTick((v) => v + 1);
   }
 
   async function copyPorToClipboard() {
     if (!result) return;
-    const text = fmtPt(result.POR_sugerido); // sem "R$" pro usuário colar em qualquer lugar
+    const text = fmtPt(result.POR_sugerido);
     try {
       await navigator.clipboard.writeText(text);
       showToast("ok", "Preço POR copiado.");
-
     } catch {
       showToast("err", "Não consegui copiar. Tente novamente.");
-
     }
   }
 
@@ -1028,127 +1007,74 @@ useEffect(() => {
         </section>
       ) : null}
 
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <div className="grid gap-4 md:grid-cols-2">
+      <section className="relative overflow-visible rounded-2xl border border-white/10 bg-white/5 p-6">
+        <div className="relative overflow-visible isolate grid gap-4 md:grid-cols-2">
           {/* ESQUERDA */}
           <div className="grid gap-3">
-            <label className="grid gap-1">
-              <span className="text-xs text-white/60">
-                Buscar (SKU ou nome)
-                <InfoTip text="Digite e selecione um produto cadastrado. Se não achar, use o cadastro manual abaixo." />
-              </span>
-              <input
-                value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  if (!e.target.value.trim()) setSelectedSku(null);
-                }}
-                placeholder="Digite SKU ou nome..."
-                className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60"
-              />
-            </label>
+            {/* --- INÍCIO DO BLOCO DE BUSCA RESPONSIVA --- */}
+            <div className="grid gap-1 relative">
+              <label className="grid gap-1">
+                <span className="text-xs text-white/60">
+                  Buscar (SKU ou nome)
+                  <InfoTip text="Digite e selecione um produto cadastrado. Se não achar, use o cadastro manual abaixo." />
+                </span>
+                <input
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    if (!e.target.value.trim()) setSelectedSku(null);
+                  }}
+                  placeholder="Digite SKU ou nome..."
+                  className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60 w-full"
+                />
+              </label>
 
-            {!!query.trim() && (
-              <div className="rounded-xl border border-white/10 bg-white/5 p-2">
-                <p className="px-2 pb-2 text-xs text-white/60">Sugestões</p>
-                <div className="grid gap-2">
-                  {filteredProducts.length ? (
-                    filteredProducts.map((p) => (
-                      <button
-                        key={p.sku}
-                        onClick={() => {
-                          setSelectedSku(p.sku);
-                          setQuery(""); // ✅ fecha sugestões
-                        }}
-                        className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-neutral-950/40 px-3 py-2 text-left hover:bg-neutral-950/60"
-                      >
-                        <div>
-                          <p className="text-sm font-semibold text-white">{p.name}</p>
-                          <p className="text-xs text-white/60">SKU: {p.sku} • CMV: R$ {fmtPt(p.cmv)}</p>
-                        </div>
-                        <span className="text-xs text-white/60">Selecionar</span>
-                      </button>
-                    ))
-                  ) : (
-                    <div className="px-3 py-3 text-sm text-white/60">
-                      Nenhum produto encontrado. Use o cadastro manual abaixo.
-                    </div>
-                  )}
+              {/* LISTA DE SUGESTÕES ABSOLUTA */}
+              {!!query.trim() && !selectedSku && (
+                <div className="absolute top-[calc(100%+6px)] left-0 right-0 z-50 rounded-xl border border-white/10 bg-neutral-900/95 p-2 shadow-2xl backdrop-blur">
+                  <p className="px-2 pb-2 text-[10px] uppercase font-bold text-white/40">Sugestões</p>
+                  <div className="grid gap-2 max-h-60 overflow-y-auto">
+                    {filteredProducts.length ? (
+                      filteredProducts.map((p) => (
+                        <button
+                          key={p.sku}
+                          type="button"
+                          onClick={() => {
+                            setSelectedSku(p.sku);
+                            setQuery(p.name);
+                          }}
+                          className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-neutral-950/40 px-3 py-2 text-left hover:bg-neutral-950/60"
+                        >
+                          <div>
+                            <p className="text-sm font-semibold text-white">{p.name}</p>
+                            <p className="text-xs text-white/60">
+                              SKU: {p.sku} • CMV: R$ {fmtPt(p.cmv)}
+                            </p>
+                          </div>
+                          <span className="text-[10px] bg-white/5 px-2 py-1 rounded-md text-white/40">Selecionar</span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-3 py-3 text-sm text-white/60">Nenhum produto encontrado.</div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
-
-            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-              <p className="text-xs text-white/60">Produto</p>
-              <p className="mt-1 text-sm font-semibold">{effectiveName}</p>
-              <p className="mt-1 text-xs text-white/60">
-                CMV: <b>{effectiveCmv > 0 ? fmtPt(effectiveCmv) : "—"}</b>
-                {picked ? <span className="ml-2 text-white/40">(cadastrado)</span> : null}
-              </p>
+              )}
             </div>
+            {/* --- FIM DO BLOCO DE BUSCA RESPONSIVA --- */}
 
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="grid gap-1">
-                <span className="text-xs text-white/60">
-                  Nome do produto (manual)
-                  <InfoTip text="Use quando não tiver SKU cadastrado." />
-                </span>
-                <input
-                  value={manualName}
-                  onChange={(e) => setManualName(e.target.value)}
-                  placeholder="Ex: Banqueta"
-                  className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60"
-                />
-              </label>
-
-              <label className="grid gap-1">
-                <span className="text-xs text-white/60">
-                  CMV (manual)
-                  <InfoTip text="Custo do produto. Sem CMV não há cálculo." />
-                </span>
-                <input
-                  value={manualCmv}
-                  onChange={(e) => setManualCmv(e.target.value)}
-                  placeholder="Ex: 332,43"
-                  inputMode="decimal"
-                  className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60"
-                />
-              </label>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="grid gap-1">
-                <span className="text-xs text-white/60">Canal</span>
-                <select
-  value={channel}
-  onChange={(e) => {
-    setChannel(e.target.value as ChannelKey);
-    setMargemDirty(false);
-  }}
-  className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60"
->
-  {Object.keys(settings?.channels || {}).map((k) => (
-    <option key={k} value={k}>
-      {channelLabel(k)}
-    </option>
-  ))}
-</select>
-
-              </label>
-
-              <label className="grid gap-1">
-                <span className="text-xs text-white/60">Regime tributário</span>
-                <select
-                  value={regimeOverride}
-                  onChange={(e) => setRegimeOverride(e.target.value as any)}
-                  className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60"
-                >
-                  <option value="default">Usar Configurações</option>
-                  <option value="simples">Simples Nacional</option>
-                  <option value="normal">Regime normal</option>
-                </select>
-              </label>
-            </div>
+            <label className="grid gap-1">
+              <span className="text-xs text-white/60">Regime tributário</span>
+              <select
+                value={regimeOverride}
+                onChange={(e) => setRegimeOverride(e.target.value as any)}
+                className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60"
+              >
+                <option value="default">Usar Configurações</option>
+                <option value="simples">Simples Nacional</option>
+                <option value="normal">Regime normal</option>
+              </select>
+            </label>
 
             {channel === "meli" && (
               <div className="rounded-xl border border-white/10 bg-white/5 p-4">
@@ -1177,9 +1103,7 @@ useEffect(() => {
                     Premium
                   </button>
                 </div>
-                <p className="mt-2 text-[11px] text-white/50">
-                  As comissões são puxadas da regra ativa em Configurações.
-                </p>
+                <p className="mt-2 text-[11px] text-white/50">As comissões são puxadas da regra ativa em Configurações.</p>
               </div>
             )}
 
@@ -1215,9 +1139,8 @@ useEffect(() => {
 
                 <p className="mt-2 text-xs text-white/50">
                   {magaluShipMode === "full"
-  ? "No Full Magalu, o crédito de frete pode ser aplicado no Regime Normal (se créditos estiverem ativos)."
-  : "No envio próprio, o crédito de frete pode ser aplicado no Regime Normal (se créditos estiverem ativos)."}
-
+                    ? "No Full Magalu, o crédito de frete fica zerado (mesmo no Regime Normal)."
+                    : "No envio próprio, o crédito de frete pode ser aplicado no Regime Normal (se créditos estiverem ativos)."}
                 </p>
               </div>
             )}
@@ -1295,9 +1218,7 @@ useEffect(() => {
                   placeholder={operMode === "percent" ? "ex: 2,5" : "ex: 12,00"}
                   className="mt-3 w-full rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60"
                 />
-                <p className="mt-2 text-xs text-white/50">
-                  {operMode === "percent" ? "Percentual sobre o POR (preço pago)." : "Valor fixo em R$."}
-                </p>
+                <p className="mt-2 text-xs text-white/50">{operMode === "percent" ? "Percentual sobre o POR (preço pago)." : "Valor fixo em R$."}</p>
               </div>
 
               {/* Ads */}
@@ -1340,9 +1261,7 @@ useEffect(() => {
                   placeholder={adsMode === "percent" ? "ex: 3" : "ex: 25,00"}
                   className="mt-3 w-full rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60"
                 />
-                <p className="mt-2 text-xs text-white/50">
-                  {adsMode === "percent" ? "Percentual sobre o POR (preço pago)." : "Valor fixo em R$."}
-                </p>
+                <p className="mt-2 text-xs text-white/50">{adsMode === "percent" ? "Percentual sobre o POR (preço pago)." : "Valor fixo em R$."}</p>
               </div>
 
               {/* Desconto + Rebate */}
@@ -1353,7 +1272,6 @@ useEffect(() => {
                     <InfoTip text="Selecione um cupom da lista ou digite um valor manualmente." />
                   </p>
 
-                  {/* Lista de cupons */}
                   {coupons.length > 0 && (
                     <div className="mt-3 grid gap-2">
                       <label className="text-xs text-white/60">Cupons disponíveis</label>
@@ -1405,7 +1323,7 @@ useEffect(() => {
                     value={descontoValue}
                     onChange={(e) => {
                       setDescontoValue(e.target.value);
-                      setSelectedCouponId(null); // limpa seleção ao digitar manualmente
+                      setSelectedCouponId(null);
                     }}
                     inputMode="decimal"
                     placeholder={descontoMode === "percent" ? "ex: 10" : "ex: 25,00"}
@@ -1467,11 +1385,7 @@ useEffect(() => {
 
                   <div className="grid gap-2">
                     <SmallInput label="Crédito frete (%)" value={creditFreteOverride} onChange={setCreditFreteOverride} />
-                    <SmallInput
-                      label="Crédito comissão (%)"
-                      value={creditComissaoOverride}
-                      onChange={setCreditComissaoOverride}
-                    />
+                    <SmallInput label="Crédito comissão (%)" value={creditComissaoOverride} onChange={setCreditComissaoOverride} />
                   </div>
                 </div>
               </div>
@@ -1479,7 +1393,7 @@ useEffect(() => {
           </div>
 
           {/* DIREITA */}
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+          <div className="relative z-0 rounded-2xl border border-white/10 bg-white/5 p-5">
             <p className="text-xs font-medium tracking-wide text-white/60">RESULTADO</p>
 
             {!result ? (
@@ -1530,20 +1444,19 @@ useEffect(() => {
                     </button>
 
                     {toast ? (
-  <div className="fixed bottom-4 right-4 z-50">
-    <div
-      className={
-        "rounded-xl px-4 py-3 text-sm font-semibold shadow-lg ring-1 " +
-        (toast.type === "ok"
-          ? "bg-emerald-500/15 text-emerald-100 ring-emerald-500/30"
-          : "bg-rose-500/15 text-rose-100 ring-rose-500/30")
-      }
-    >
-      {toast.text}
-    </div>
-  </div>
-) : null}
-
+                      <div className="fixed bottom-4 right-4 z-50">
+                        <div
+                          className={
+                            "rounded-xl px-4 py-3 text-sm font-semibold shadow-lg ring-1 " +
+                            (toast.type === "ok"
+                              ? "bg-emerald-500/15 text-emerald-100 ring-emerald-500/30"
+                              : "bg-rose-500/15 text-rose-100 ring-rose-500/30")
+                          }
+                        >
+                          {toast.text}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
 
                   <button
@@ -1569,9 +1482,7 @@ useEffect(() => {
                 </div>
 
                 <div className="mt-4 rounded-2xl border border-blue-500/20 bg-blue-500/10 p-5">
-                  <p className="text-xs font-semibold text-blue-100">
-                    PARA ATINGIR {parseNumberPt(margem).toFixed(2)}% DE MARGEM
-                  </p>
+                  <p className="text-xs font-semibold text-blue-100">PARA ATINGIR {parseNumberPt(margem).toFixed(2)}% DE MARGEM</p>
 
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <div className="rounded-xl border border-white/10 bg-white/5 p-4">
@@ -1587,22 +1498,12 @@ useEffect(() => {
                     </div>
                   </div>
 
-                  {discountSimulation ? (
-                    <div className="mt-3 text-xs text-blue-50/80">
-                      {/* mantido vazio como estava no seu código */}
-                    </div>
-                  ) : null}
+                  {discountSimulation ? <div className="mt-3 text-xs text-blue-50/80">{/* mantido vazio */}</div> : null}
                 </div>
 
                 <div className="mt-4 space-y-2 text-sm">
-                  <Row
-                    label={`Comissão (${result.channelUsed.commissionPercent.toFixed(2)}%)`}
-                    value={`R$ ${fmtPt(result.breakdown.comissao)}`}
-                  />
-                  <Row
-                    label={`Imposto (${result.channelUsed.mainTaxPercent.toFixed(2)}%)`}
-                    value={`R$ ${fmtPt(result.breakdown.imposto)}`}
-                  />
+                  <Row label={`Comissão (${result.channelUsed.commissionPercent.toFixed(2)}%)`} value={`R$ ${fmtPt(result.breakdown.comissao)}`} />
+                  <Row label={`Imposto (${result.channelUsed.mainTaxPercent.toFixed(2)}%)`} value={`R$ ${fmtPt(result.breakdown.imposto)}`} />
                   <Row
                     label={`PIS/COFINS (9,25%) ${result.regimeUsed === "normal" ? "" : "(não aplica)"}`}
                     value={`R$ ${fmtPt(result.breakdown.pisCofins)}`}
@@ -1658,15 +1559,7 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
   );
 }
 
-function SmallInput({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
+function SmallInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <label className="grid gap-1">
       <span className="text-[11px] text-white/60">{label}</span>
@@ -1707,8 +1600,7 @@ function Accordion({
 
         <span
           className={
-            "grid h-8 w-8 place-items-center rounded-xl bg-white/5 ring-1 ring-white/10 transition " +
-            (open ? "rotate-180" : "")
+            "grid h-8 w-8 place-items-center rounded-xl bg-white/5 ring-1 ring-white/10 transition " + (open ? "rotate-180" : "")
           }
           aria-hidden
         >
@@ -1719,8 +1611,6 @@ function Accordion({
       </button>
 
       {open ? <div className="px-4 pb-4">{children}</div> : null}
-
-      
     </div>
   );
 }

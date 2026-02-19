@@ -1,62 +1,55 @@
 "use client";
-
+import { useState } from "react";
 import Link from "next/link";
-import { signOut } from "next-auth/react";
+import { usePathname } from "next/navigation";
 
-const nav = [
-  { href: "/minha-conta", label: "Minha Conta" },
-  { href: "/configuracoes", label: "Configurações" },
-  { href: "/produtos", label: "Produtos" },
-  { href: "/precificacao", label: "Precificação" },
-  { href: "/promocoes", label: "Promoções" },
-  { href: "/historico", label: "Histórico" },
-  
-];
+export function Header({ isLoggedIn, userName }: { isLoggedIn: boolean; userName?: string | null }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const pathname = usePathname();
 
-type Props = {
-  isLoggedIn: boolean;
-  userName?: string | null;
-};
+  const links = [
+    { name: "Precificação", href: "/precificacao" },
+    { name: "Produtos", href: "/produtos" },
+    { name: "Promoções", href: "/promocoes" },
+    { name: "Configurações", href: "/configuracoes" },
+  ];
 
-export function Header({ isLoggedIn, userName }: Props) {
+  if (!isLoggedIn) return null;
+
   return (
-        <header className="flex items-center justify-between py-4">
-
-      {/* Logo */}
-      <Link href="/" className="flex items-center gap-3">
-        <div className="h-9 w-9 rounded-xl theme-logo grid place-items-center">
-          <span className="text-sm font-semibold">M</span>
+    <header className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md px-4 py-3 relative z-50">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-8 bg-emerald-500 rounded-lg flex items-center justify-center font-bold text-black">M</div>
+          <span className="font-semibold hidden sm:inline">Markup</span>
         </div>
-        <div>
-          <p className="text-xs font-medium tracking-[0.22em] theme-muted">
-            MARKUP
-          </p>
-          <p className="text-sm theme-muted2">
-            Precificação inteligente para marketplaces
-          </p>
-        </div>
-      </Link>
 
-      {/* Nav */}
-      {isLoggedIn && (
-        <nav className="flex items-center gap-2">
-          {nav.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="rounded-xl px-4 py-2 text-sm font-semibold transition theme-nav-link"
-            >
-              {item.label}
+        {/* Menu Desktop */}
+        <nav className="hidden md:flex gap-4">
+          {links.map((link) => (
+            <Link key={link.href} href={link.href} className={`text-sm ${pathname === link.href ? 'text-white' : 'text-white/60 hover:text-white'}`}>
+              {link.name}
             </Link>
           ))}
-
-          <button
-            onClick={() => signOut({ callbackUrl: "/" })}
-            className="rounded-xl px-3 py-2 text-xs font-semibold transition theme-signout"
-          >
-            Sair{userName ? ` (${userName.split(" ")[0]})` : ""}
-          </button>
         </nav>
+
+        {/* Botão Hambúrguer Mobile */}
+        <button onClick={() => setIsOpen(!isOpen)} className="md:hidden p-2 text-white/60">
+          {isOpen ? "✕" : "☰"}
+        </button>
+      </div>
+
+      {/* Dropdown Mobile */}
+      {isOpen && (
+        <div className="md:hidden absolute top-full left-0 right-0 mt-2 bg-neutral-900 border border-white/10 rounded-xl p-4 flex flex-col gap-4 shadow-xl">
+          {links.map((link) => (
+            <Link key={link.href} href={link.href} onClick={() => setIsOpen(false)} className="text-base font-medium">
+              {link.name}
+            </Link>
+          ))}
+          <hr className="border-white/10" />
+          <div className="text-xs text-white/40">Logado como: {userName}</div>
+        </div>
       )}
     </header>
   );
