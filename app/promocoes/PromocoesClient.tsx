@@ -14,7 +14,7 @@ import {
 } from "../../lib/pricing";
 
 function solvePORLocal(params: Parameters<typeof solvePOR>[0]) {
-  const p = { ...params, descontoMode: undefined as Parameters<typeof solvePOR>[0]["descontoMode"], descontoValue: 0 };
+  const p = { ...params, descontoMode: undefined as any, descontoValue: 0 };
   return solvePOR(p);
 }
 
@@ -71,11 +71,9 @@ type PromoRow = {
   precoProposto: number;
 };
 
-type RawCell = string | number | boolean | null | undefined;
-type RawRow = RawCell[];
-type RowObject = Record<string, RawCell>;
-
+const STORAGE_RULESETS = "markup_settings_rulesets_v1";
 const STORAGE_PROMOS = "markup_promocoes_v1";
+const STORAGE_PRODUCTS = "markup_products_v1";
 const STORAGE_PROMOS_HISTORY = "markup_promocoes_history_v1";
 
 function normalizeSku(s: string) {
@@ -97,12 +95,15 @@ function normKey(s: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ");
 }
-function getCell(row: RowObject, candidates: string[]): RawCell {
-  const keys = Object.keys(row);
-  for (const c of candidates) {
-    const ck = normKey(c);
-    const found = keys.find((k) => normKey(k) === ck);
-    if (found != null) return row[found];
+function getCell(row: any, candidates: string[]) {
+  if (row && typeof row === "object" && !Array.isArray(row)) {
+    const keys = Object.keys(row || {});
+    for (const c of candidates) {
+      const ck = normKey(c);
+      const found = keys.find((k) => normKey(k) === ck);
+      if (found != null) return row[found];
+    }
+    return undefined;
   }
   return undefined;
 }
@@ -118,9 +119,6 @@ function calcPublicadoFromPago(pagoFinalCliente: number, cupomMode: MoneyMode, c
   }
   return pagoFinalCliente + Math.max(0, cupomValue);
 }
-
-// calcPublicadoFromPago is defined but used only in edge cases — keep it to avoid dead-code removal
-void calcPublicadoFromPago;
 
 function pickPromocoesSheet(wb: XLSX.WorkBook) {
   const names = wb.SheetNames || [];
@@ -139,24 +137,21 @@ function pickPromocoesSheet(wb: XLSX.WorkBook) {
   return firstNonAjuda || names[0];
 }
 
-function aoaToObjects(aoa: RawRow[]): RowObject[] {
+function aoaToObjects(aoa: any[][]) {
   if (!aoa?.length) return [];
   const header = (aoa[0] || []).map((h) => String(h ?? "").trim());
-  const out: RowObject[] = [];
+  const out: any[] = [];
   for (let i = 1; i < aoa.length; i++) {
     const row = aoa[i] || [];
-    if (!row.some((c) => String(c ?? "").trim() !== "")) continue;
-    const obj: RowObject = {};
+    if (!row.some((c: any) => String(c ?? "").trim() !== "")) continue;
+    const obj: any = {};
     for (let j = 0; j < header.length; j++) obj[header[j]] = row[j] ?? "";
     out.push(obj);
   }
   return out;
 }
 
-// aoaToObjects is used in potential future imports — keep it
-void aoaToObjects;
-
-function findHeaderRowIndex(rows: RawRow[]) {
+function findHeaderRowIndex(rows: any[][]) {
   const required = ["titulo", "numero", "sku", "preco", "final"];
   for (let i = 0; i < Math.min(rows.length, 30); i++) {
     const line = (rows[i] || []).map((c) => normKey(String(c ?? "")));
@@ -166,15 +161,15 @@ function findHeaderRowIndex(rows: RawRow[]) {
   return -1;
 }
 
-function rowArrayToObject(row: RawRow, headers: string[]): RowObject {
-  const obj: RowObject = {};
+function rowArrayToObject(row: any[], headers: string[]) {
+  const obj: Record<string, any> = {};
   for (let i = 0; i < headers.length; i++) {
     obj[headers[i]] = row[i] ?? "";
   }
   return obj;
 }
 
-function safeNumberFromExcel(value: RawCell): number {
+function safeNumberFromExcel(value: any): number {
   if (value == null || value === "") return 0;
   if (typeof value === "number") return value;
   const str = String(value).trim();
@@ -203,7 +198,7 @@ function buildDescontoFinalPriceMap(wb: XLSX.WorkBook) {
     header: 1,
     raw: true,
     defval: "",
-  }) as RawRow[];
+  }) as any[][];
 
   if (!rowsMatrix?.length) return map;
 
@@ -314,19 +309,18 @@ export default function PromocoesClient() {
       try {
         const res = await fetch('/api/settings/rulesets');
         if (res.ok) {
-          const json = await res.json() as { rulesets?: Record<string, unknown>[] };
+          const json = await res.json();
           const list = Array.isArray(json?.rulesets) ? json.rulesets : [];
-          const active = list.find((r) => r.isActive) || list[0] || null;
+          const active = list.find((r: any) => r.isActive) || list[0] || null;
           if (active) {
-            const raw = (active.data ? active.data : active) as Record<string, unknown>;
+            const raw = active.data ? active.data : active;
             const regime: "simples" | "normal" = raw.regime === "simples" ? "simples" : "normal";
             const mainTax = regime === "normal" ? 18 : 14;
-            const channels = (raw.channels as Record<string, Record<string, unknown>>) || {};
-            const meli = channels.meli || {};
+            const meli = raw.channels?.meli || {};
             const mapped = {
               ...raw,
               channels: {
-                ...channels,
+                ...raw.channels,
                 meli: {
                   ...meli,
                   mainTaxPercent: typeof meli.mainTaxPercent === "number" ? meli.mainTaxPercent : mainTax,
@@ -334,13 +328,13 @@ export default function PromocoesClient() {
                   creditFretePercent: typeof meli.creditFretePercent === "number" ? meli.creditFretePercent : 21.25,
                   creditCommissionPercent: typeof meli.creditCommissionPercent === "number" ? meli.creditCommissionPercent : 9.25,
                   meli: {
-                    classicCommissionPercent: (raw.meli as Record<string, number> | undefined)?.classicCommissionPercent ?? 11.5,
-                    premiumCommissionPercent: (raw.meli as Record<string, number> | undefined)?.premiumCommissionPercent ?? 16.5,
+                    classicCommissionPercent: raw.meli?.classicCommissionPercent ?? 11.5,
+                    premiumCommissionPercent: raw.meli?.premiumCommissionPercent ?? 16.5,
                   },
                 },
               },
             };
-            setSettings(mapped as unknown as Settings);
+            setSettings(mapped);
           }
         }
       } catch {}
@@ -353,10 +347,10 @@ export default function PromocoesClient() {
           console.warn("⚠️ Erro ao buscar produtos da API:", response.statusText);
           return;
         }
-        const data = await response.json() as { products?: Record<string, unknown>[]; filtered?: number };
-        const parsed = (data.products || []) as Record<string, unknown>[];
+        const data = await response.json();
+        const parsed = (data.products || data || []) as any[];
         const next: Product[] = parsed.map((p) => ({
-          sku: normalizeSku(String(p.sku ?? "")),
+          sku: normalizeSku(p.sku),
           name: String(p.name ?? "").trim(),
           cmv: Number(p.cmv ?? 0) || 0,
           mlb: p.mlb ? normalizeMlb(String(p.mlb)) : undefined,
@@ -380,7 +374,7 @@ export default function PromocoesClient() {
 
     try {
       const raw = localStorage.getItem(STORAGE_PROMOS);
-      if (raw) setRows(JSON.parse(raw) as PromoRow[]);
+      if (raw) setRows(JSON.parse(raw));
     } catch {}
   }, []);
 
@@ -426,7 +420,7 @@ export default function PromocoesClient() {
 
     let commissionPercent = baseCh.commissionPercent;
     if (channel === "meli") {
-      const meliCfg = baseCh.meli || (settings as Settings & { meli?: { classicCommissionPercent?: number; premiumCommissionPercent?: number } }).meli;
+      const meliCfg = baseCh.meli || (settings as any).meli;
       if (meliCfg) {
         commissionPercent =
           meliMode === "premium"
@@ -493,7 +487,7 @@ export default function PromocoesClient() {
               cmv, markupBase, frete, operMode, operValue, adsMode, adsValue,
               margemAlvoPercent: alvo, channel: ch, channelRaw: baseCh,
               regime: effectiveRegime, rebateMode, rebateValue,
-              descontoMode: "fixed" as Parameters<typeof solvePOR>[0]["descontoMode"], descontoValue: 0,
+              descontoMode: "fixed" as any, descontoValue: 0,
             });
             return { ...res, breakdown: { ...res.breakdown } };
           })()
@@ -502,10 +496,10 @@ export default function PromocoesClient() {
               cmv, markupBase, frete, operMode, operValue, adsMode, adsValue,
               margemAlvoPercent: alvo, channel: ch,
               regime: effectiveRegime, rebateMode, rebateValue,
-              descontoMode: "fixed" as Parameters<typeof solvePOR>[0]["descontoMode"], descontoValue: 0,
+              descontoMode: "fixed" as any, descontoValue: 0,
             }),
             channelUsed: ch,
-          });
+          } as any);
 
       const pago = round2(calc.POR_sugerido);
       const publicado = round2(calc.precoDE);
@@ -646,7 +640,7 @@ export default function PromocoesClient() {
           header: 1,
           raw: true,
           defval: "",
-        }) as RawRow[];
+        }) as any[][];
 
         if (!rowsMatrix.length) {
           showToast("err", "A aba 'Promoções' está vazia.");
@@ -681,7 +675,7 @@ export default function PromocoesClient() {
           });
 
         const imported: PromoRow[] = json
-          .map((row): PromoRow | null => {
+          .map((row) => {
             const tituloAnuncio = String(
               getCell(row, ["Título do anúncio", "Titulo do anúncio", "Titulo do anuncio", "titulo do anuncio"]) || ""
             ).trim();
@@ -704,6 +698,17 @@ export default function PromocoesClient() {
                   "Redução nas suas tarifas de venda",
                   "Reducao nas suas tarifas de venda",
                   "Redução nas duas tarifas de venda",
+                ])
+              )
+            );
+
+            const descontoPct = round2(
+              safeNumberFromExcel(
+                getCell(row, [
+                  "Desconto - Porcentagem",
+                  "Desconto - Porcentagem ",
+                  "Desconto - %",
+                  "Porcentagem",
                 ])
               )
             );
@@ -791,9 +796,9 @@ export default function PromocoesClient() {
               abaixoDaMeta: true,
 
               precoProposto: precoFinalDesconto || precoFinal || 0,
-            };
+            } as PromoRow;
           })
-          .filter((r): r is PromoRow => r !== null);
+          .filter(Boolean) as PromoRow[];
 
         if (!imported.length) {
           console.warn("No rows imported. Total processable rows:", json.length);
@@ -881,7 +886,7 @@ export default function PromocoesClient() {
   function saveDraftToHistory() {
     try {
       const raw = localStorage.getItem(STORAGE_PROMOS_HISTORY);
-      const history = raw ? (JSON.parse(raw) as unknown[]) : [];
+      const history = raw ? JSON.parse(raw) : [];
       const snap = {
         id: crypto.randomUUID(),
         createdAt: new Date().toISOString(),
@@ -1182,7 +1187,7 @@ export default function PromocoesClient() {
             <span className="text-xs text-white/60">Regime</span>
             <select
               value={regimeOverride}
-              onChange={(e) => setRegimeOverride(e.target.value as "default" | Regime)}
+              onChange={(e) => setRegimeOverride(e.target.value as any)}
               className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60"
             >
               <option value="default">Usar Configurações</option>
@@ -1547,7 +1552,7 @@ export default function PromocoesClient() {
                             <select
                               value={r.cupomMode}
                               onChange={(e) =>
-                                updateRow(r.id, { cupomMode: e.target.value as MoneyMode })
+                                updateRow(r.id, { cupomMode: e.target.value as any })
                               }
                               className="h-10 w-16 rounded-xl bg-neutral-950/60 px-2 text-sm text-white ring-1 ring-white/10 outline-none"
                             >
@@ -1574,7 +1579,7 @@ export default function PromocoesClient() {
                             <select
                               value={r.rebateMode}
                               onChange={(e) =>
-                                updateRow(r.id, { rebateMode: e.target.value as MoneyMode })
+                                updateRow(r.id, { rebateMode: e.target.value as any })
                               }
                               className="h-10 w-16 rounded-xl bg-neutral-950/60 px-2 text-sm text-white ring-1 ring-white/10 outline-none"
                             >
