@@ -153,7 +153,10 @@ function guessColumnMap(headers: string[]) {
   return { idxSku, idxName, idxCmv, idxMlb };
 }
 
-function rowsToImportItems(rows: any[][]) {
+type RawCell = string | number | boolean | null | undefined;
+type RawRow = RawCell[];
+
+function rowsToImportItems(rows: RawRow[]) {
   if (!rows.length) return [];
 
   const first = rows[0].map((c) => String(c ?? ""));
@@ -194,12 +197,12 @@ function rowsToImportItems(rows: any[][]) {
 }
 
 /** ----------------- EXCEL (.xls/.xlsx) ----------------- */
-function cleanText(v: any) {
+function cleanText(v: unknown) {
   if (v == null) return "";
   return String(v).trim();
 }
 
-async function parseExcelFile(file: File): Promise<any[][]> {
+async function parseExcelFile(file: File): Promise<RawRow[]> {
   const XLSX = await import("xlsx");
   const data = await file.arrayBuffer();
   const wb = XLSX.read(data, { type: "array" });
@@ -207,14 +210,14 @@ async function parseExcelFile(file: File): Promise<any[][]> {
   const sheetName = wb.SheetNames[0];
   const ws = wb.Sheets[sheetName];
 
-  const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" }) as any[][];
-  return rows.map((row) => (row || []).map((c: any) => cleanText(c)));
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" }) as RawRow[];
+  return rows.map((row) => (row || []).map((c) => cleanText(c)));
 }
 
 /** ----------------- API (DB) ----------------- */
 async function loadFromDb() {
   const res = await fetch("/api/products", { method: "GET" });
-  const data = await res.json();
+  const data = await res.json() as { products?: Product[]; error?: string };
   if (!res.ok) throw new Error(data?.error || "Erro ao carregar produtos");
   return (data?.products ?? []) as Product[];
 }
@@ -225,7 +228,7 @@ async function saveToDb(nextProducts: Product[]) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ products: nextProducts }),
   });
-  const data = await res.json();
+  const data = await res.json() as { error?: string };
   if (!res.ok) throw new Error(data?.error || "Erro ao salvar produtos");
 }
 
@@ -260,7 +263,7 @@ export default function ProdutosPage() {
       try {
         const dbProducts = await loadFromDb();
         if (!cancelled) setProducts(dbProducts);
-      } catch (e: any) {
+      } catch (e) {
         console.error(e);
         if (!cancelled) toast("Não consegui carregar seus produtos (veja o console).");
       }
@@ -277,7 +280,7 @@ export default function ProdutosPage() {
     try {
       await saveToDb(nextProducts);
       if (successMsg) toast(successMsg);
-    } catch (e: any) {
+    } catch (e) {
       console.error(e);
       toast("Erro ao salvar no banco (veja o console).");
     } finally {
@@ -345,7 +348,7 @@ export default function ProdutosPage() {
 
     const nextProducts = Array.from(map.values()).sort((a, b) => a.sku.localeCompare(b.sku));
 
-    // mantém “última importação” local (opcional)
+    // mantém "última importação" local (opcional)
     if (rawSourceToSave != null) {
       try {
         localStorage.setItem(STORAGE_LAST_IMPORT_BASE, rawSourceToSave);
@@ -493,9 +496,10 @@ export default function ProdutosPage() {
         importItems(items.map((x) => ({ sku: x.sku, name: x.name, cmv: Number(x.cmv || 0), mlb: x.mlb })), text);
         toast("CSV/TXT importado com sucesso.");
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      toast(`Erro ao ler arquivo: ${err?.message || "desconhecido"}`);
+      const msg = err instanceof Error ? err.message : "desconhecido";
+      toast(`Erro ao ler arquivo: ${msg}`);
     } finally {
       e.target.value = "";
     }
