@@ -1,6 +1,7 @@
+// app/page.tsx
 import Link from "next/link";
 import { auth } from "@/auth";
-import { CredentialsLogin, GoogleButton } from "./components/AuthClientButtons";
+import { CredentialsLogin, GoogleButton, SignOutButton } from "./components/AuthClientButtons";
 
 export default async function HomePage() {
   const session = await auth();
@@ -27,11 +28,14 @@ export default async function HomePage() {
             >
               Minha conta
             </Link>
+            {/* ✅ BOTÃO SAIR */}
+            <SignOutButton />
           </div>
         </section>
       </div>
     );
   }
+
 
   return (
     <div className="space-y-5">
