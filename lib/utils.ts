@@ -128,3 +128,13 @@ export function sortBy<T>(array: T[], key: keyof T, order: "asc" | "desc" = "asc
     return 0;
   });
 }
+import { auth } from "@/auth";
+import { NextResponse } from "next/server";
+
+export async function getSessionOrThrow() {
+  const session = await auth();
+  if (!session?.user?.id) {
+    throw NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+  return session;
+}
