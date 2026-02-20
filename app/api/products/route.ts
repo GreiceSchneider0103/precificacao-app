@@ -159,3 +159,53 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "Erro ao deletar produto" }, { status: 500 });
   }
 }
+
+/**
+ * PUT: Substitui toda a base de produtos do usuário (bulk upsert)
+ */
+export async function PUT(request: NextRequest) {
+  try {
+    const session = await auth();
+    const userId = session?.user?.id;
+
+    if (!userId) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+
+    const body = await request.json() as { products?: unknown[] };
+    const products = body?.products;
+
+    if (!Array.isArray(products)) {
+      return NextResponse.json({ error: "Lista de produtos inválida" }, { status: 400 });
+    }
+
+    // Upsert de cada produto da lista
+    await Promise.all(
+      products.map((p) => {
+        const prod = p as { sku: string; name: string; cmv: number; mlb?: string | null };
+        const skuNorm = prod.sku.trim().toUpperCase();
+        return prisma.product.upsert({
+          where: { userId_sku: { userId, sku: skuNorm } },
+          update: {
+            name: prod.name.trim(),
+            cmv: Number(prod.cmv),
+            mlb: prod.mlb ? String(prod.mlb).trim() : null,
+            updatedAt: new Date(),
+          },
+          create: {
+            userId,
+            sku: skuNorm,
+            name: prod.name.trim(),
+            cmv: Number(prod.cmv),
+            mlb: prod.mlb ? String(prod.mlb).trim() : null,
+          },
+        });
+      })
+    );
+
+    return NextResponse.json({ success: true, total: products.length });
+  } catch (error) {
+    console.error("[PUT /api/products]", error);
+    return NextResponse.json({ error: "Erro ao salvar produtos" }, { status: 500 });
+  }
+}
