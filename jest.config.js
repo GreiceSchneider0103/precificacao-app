@@ -38,3 +38,18 @@ const customJestConfig = {
 
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async
 module.exports = createJestConfig(customJestConfig);
+
+
+// jest.config.js
+import nextJest from "next/jest.js";
+
+const createJestConfig = nextJest({ dir: "./" });
+
+/** @type {import('jest').Config} */
+const config = {
+  coverageProvider: "v8",
+  testEnvironment: "jsdom",
+  setupFilesAfterFramework: ["<rootDir>/jest.setup.js"],
+};
+
+export default createJestConfig(config);
