@@ -46,6 +46,10 @@ type SolvePORParams = {
   margemAlvoPercent: number;
   channel: { commissionPercent: number; taxFixed: number; mainTaxPercent: number; hasCredits: boolean; creditFretePercent: number; creditCommissionPercent: number; pisCofinsPercent?: number; cardFeePercent?: number; influencerPercent?: number; incentiveCreditPercent?: number };
   regime: Regime; rebateMode: MoneyMode; rebateValue: number; descontoMode: MoneyMode; descontoValue: number;
+  cardFeePercent?: number;
+  influencerMode?: MoneyMode;
+  influencerValue?: number;
+  incentiveCreditPercent?: number;
 };
 
 type BreakdownResult = {
@@ -203,6 +207,10 @@ export default function PrecificacaoPage() {
   const [adsMode, setAdsMode] = useState<MoneyMode>("fixed");
   const [adsValue, setAdsValue] = useState("0,00");
   const [margem, setMargem] = useState("20,00");
+  const [cardFeeValue, setCardFeeValue] = useState("");
+  const [influencerMode, setInfluencerMode] = useState<MoneyMode>("percent");
+  const [influencerValue, setInfluencerValue] = useState("");
+  const [incentiveCreditOverride, setIncentiveCreditOverride] = useState("");
   const [descontoMode, setDescontoMode] = useState<MoneyMode>("percent");
   const [descontoValue, setDescontoValue] = useState("0");
   const [rebateMode, setRebateMode] = useState<MoneyMode>("percent");
@@ -278,6 +286,10 @@ export default function PrecificacaoPage() {
       if (d.operValue) setOperValue(d.operValue);
       if (d.adsMode === "fixed" || d.adsMode === "percent") setAdsMode(d.adsMode);
       if (d.adsValue) setAdsValue(d.adsValue);
+      if (d.cardFeeValue) setCardFeeValue(d.cardFeeValue);
+      if (d.influencerMode) setInfluencerMode(d.influencerMode as MoneyMode);
+      if (d.influencerValue) setInfluencerValue(d.influencerValue);
+      if (d.incentiveCreditOverride) setIncentiveCreditOverride(d.incentiveCreditOverride);
       if (d.descontoMode === "fixed" || d.descontoMode === "percent") setDescontoMode(d.descontoMode);
       if (d.descontoValue) setDescontoValue(d.descontoValue); if (d.selectedCouponId) setSelectedCouponId(d.selectedCouponId);
       if (d.rebateMode === "fixed" || d.rebateMode === "percent") setRebateMode(d.rebateMode);
@@ -295,8 +307,8 @@ export default function PrecificacaoPage() {
 
   const saveDraftDebounced = useDebouncedDraftSaver(250);
   useEffect(() => {
-    saveDraftDebounced(DRAFT_KEY, { query, selectedSku, manualName, manualCmv, channel, meliMode, magaluShipMode, regimeOverride, frete, margem, operMode, operValue, adsMode, adsValue, descontoMode, descontoValue, selectedCouponId, rebateMode, rebateValue, commissionOverride, taxOverride, fixedOverride, creditFreteOverride, creditComissaoOverride });
-  }, [query, selectedSku, manualName, manualCmv, channel, meliMode, magaluShipMode, regimeOverride, frete, margem, operMode, operValue, adsMode, adsValue, descontoMode, descontoValue, selectedCouponId, rebateMode, rebateValue, commissionOverride, taxOverride, fixedOverride, creditFreteOverride, creditComissaoOverride, saveDraftDebounced]);
+    saveDraftDebounced(DRAFT_KEY, { query, selectedSku, manualName, manualCmv, channel, meliMode, magaluShipMode, regimeOverride, frete, margem, operMode, operValue, adsMode, adsValue, cardFeeValue, influencerMode, influencerValue, incentiveCreditOverride, descontoMode, descontoValue, selectedCouponId, rebateMode, rebateValue, commissionOverride, taxOverride, fixedOverride, creditFreteOverride, creditComissaoOverride });
+  }, [query, selectedSku, manualName, manualCmv, channel, meliMode, magaluShipMode, regimeOverride, frete, margem, operMode, operValue, adsMode, adsValue, cardFeeValue, influencerMode, influencerValue, incentiveCreditOverride, descontoMode, descontoValue, selectedCouponId, rebateMode, rebateValue, commissionOverride, taxOverride, fixedOverride, creditFreteOverride, creditComissaoOverride, saveDraftDebounced]);
 
   const filteredProducts = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -323,7 +335,13 @@ export default function PrecificacaoPage() {
     const creditFretePercent = effectiveChannel === "magalu" && magaluShipMode === "full" ? 0 : creditFreteBase;
     const creditCommissionPercent = creditComissaoOverride.trim() ? parseNumberPt(creditComissaoOverride) : baseCh.creditCommissionPercent;
     const ch = { commissionPercent, taxFixed, mainTaxPercent, hasCredits: baseCh.hasCredits, creditFretePercent, creditCommissionPercent, pisCofinsPercent: (baseCh as any).pisCofinsPercent, cardFeePercent: (baseCh as any).cardFeePercent, influencerPercent: (baseCh as any).influencerPercent, incentiveCreditPercent: (baseCh as any).incentiveCreditPercent };
-    const common: SolvePORParams = { cmv: effectiveCmv, markupBase, frete: parseNumberPt(frete), operMode, operValue: parseNumberPt(operValue), adsMode, adsValue: parseNumberPt(adsValue), margemAlvoPercent: parseNumberPt(margemEfetiva) || (baseCh.targetMarginPercent ?? 20), channel: ch, regime: regimeFinal, rebateMode, rebateValue: parseNumberPt(rebateValue), descontoMode, descontoValue: parseNumberPt(descontoValue) };
+    const common: SolvePORParams = { 
+      cmv: effectiveCmv, markupBase, frete: parseNumberPt(frete), operMode, operValue: parseNumberPt(operValue), adsMode, adsValue: parseNumberPt(adsValue), 
+      margemAlvoPercent: parseNumberPt(margemEfetiva) || (baseCh.targetMarginPercent ?? 20), channel: ch, regime: regimeFinal, rebateMode, rebateValue: parseNumberPt(rebateValue), descontoMode, descontoValue: parseNumberPt(descontoValue),
+      cardFeePercent: cardFeeValue.trim() ? parseNumberPt(cardFeeValue) : undefined,
+      influencerMode, influencerValue: parseNumberPt(influencerValue),
+      incentiveCreditPercent: incentiveCreditOverride.trim() ? parseNumberPt(incentiveCreditOverride) : undefined
+    };
     if (effectiveChannel === "shopee" && !commissionOverride.trim() && !fixedOverride.trim() && baseCh.shopee?.mode === "tiered") return solveWithShopeeTiered({ ...common, channelRaw: baseCh });
     return { ...solvePOR(common), channelUsed: ch, regimeUsed: regimeFinal };
   }, [settings, effectiveCmv, effectiveChannel, meliMode, magaluShipMode, frete, operMode, operValue, adsMode, adsValue, margemEfetiva, regimeOverride, descontoMode, descontoValue, rebateMode, rebateValue, commissionOverride, taxOverride, fixedOverride, creditFreteOverride, creditComissaoOverride]);
@@ -485,15 +503,25 @@ export default function PrecificacaoPage() {
             <Accordion title="Custos, Ads, Desconto e Rebate" subtitle="Ajuste somente quando necessário.">
               {(["fixed", "percent"] as MoneyMode[]).length > 0 && (
                 <div className="grid gap-3">
-                  {/* Operacionais */}
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                    <div className="flex items-center justify-between"><p className="text-sm font-semibold">Custos operacionais</p><ModeToggle value={operMode} onChange={setOperMode} /></div>
-                    <input value={operValue} onChange={(e) => setOperValue(e.target.value)} inputMode="decimal" placeholder={operMode === "percent" ? "ex: 2,5" : "ex: 12,00"} className="mt-3 w-full rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none" />
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                      <div className="flex items-center justify-between"><p className="text-sm font-semibold">Custos operacionais</p><ModeToggle value={operMode} onChange={setOperMode} /></div>
+                      <input value={operValue} onChange={(e) => setOperValue(e.target.value)} inputMode="decimal" placeholder={operMode === "percent" ? "ex: 2,5" : "ex: 12,00"} className="mt-3 w-full rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none" />
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                      <p className="text-sm font-semibold mb-3">Taxa cartão (%)</p>
+                      <input value={cardFeeValue} onChange={(e) => setCardFeeValue(e.target.value)} inputMode="decimal" placeholder="Usa padrão do canal" className="w-full rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none" />
+                    </div>
                   </div>
-                  {/* Ads */}
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                    <div className="flex items-center justify-between"><p className="text-sm font-semibold">Ads</p><ModeToggle value={adsMode} onChange={setAdsMode} /></div>
-                    <input value={adsValue} onChange={(e) => setAdsValue(e.target.value)} inputMode="decimal" placeholder={adsMode === "percent" ? "ex: 3" : "ex: 25,00"} className="mt-3 w-full rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none" />
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                      <div className="flex items-center justify-between"><p className="text-sm font-semibold">Ads</p><ModeToggle value={adsMode} onChange={setAdsMode} /></div>
+                      <input value={adsValue} onChange={(e) => setAdsValue(e.target.value)} inputMode="decimal" placeholder={adsMode === "percent" ? "ex: 3" : "ex: 25,00"} className="mt-3 w-full rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none" />
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                      <div className="flex items-center justify-between"><p className="text-sm font-semibold">Influencer</p><ModeToggle value={influencerMode} onChange={setInfluencerMode} percentFirst /></div>
+                      <input value={influencerValue} onChange={(e) => setInfluencerValue(e.target.value)} inputMode="decimal" placeholder={influencerMode === "percent" ? "ex: 5" : "ex: 50,00"} className="mt-3 w-full rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none" />
+                    </div>
                   </div>
                   {/* Desconto + Rebate */}
                   <div className="grid gap-3 md:grid-cols-2">
@@ -528,6 +556,7 @@ export default function PrecificacaoPage() {
                 <div className="grid gap-2">
                   <SmallInput label="Crédito frete (%)" value={creditFreteOverride} onChange={setCreditFreteOverride} />
                   <SmallInput label="Crédito comissão (%)" value={creditComissaoOverride} onChange={setCreditComissaoOverride} />
+                  <SmallInput label="Crédito incentivo (%)" value={incentiveCreditOverride} onChange={setIncentiveCreditOverride} />
                 </div>
               </div>
             </Accordion>

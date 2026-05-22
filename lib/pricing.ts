@@ -118,9 +118,10 @@ export function solvePOR(params: {
     rebateMode,
     rebateValue,
     pisCofinsOverride,
-    cardFeePercent = 0,
-    influencerPercent = 0,
-    incentiveCreditPercent = 0,
+    cardFeePercent,
+    influencerMode = "percent",
+    influencerValue = 0,
+    incentiveCreditPercent,
   } = params;
 
   const m = clamp(margemAlvoPercent / 100, 0, 0.95);
@@ -138,11 +139,12 @@ export function solvePOR(params: {
     const operFixed = operMode === "fixed" ? operValue : 0;
     const adsFixed = adsMode === "fixed" ? adsValue : 0;
 
-    const cardFeeCoeff = cardFeePercent / 100;
-    const influencerCoeff = influencerPercent / 100;
-    const incentiveCredCoeff = regime === "normal" ? incentiveCreditPercent / 100 : 0;
+    const cardFeeCoeff = (cardFeePercent ?? channel.cardFeePercent ?? 0) / 100;
+    const influencerCoeff = influencerMode === "percent" ? influencerValue / 100 : 0;
+    const influencerFixed = influencerMode === "fixed" ? influencerValue : 0;
+    const incentiveCredCoeff = regime === "normal" ? (incentiveCreditPercent ?? channel.incentiveCreditPercent ?? 0) / 100 : 0;
 
-    const fixedCosts = channel.taxFixed + frete + cmv + operFixed + adsFixed;
+    const fixedCosts = channel.taxFixed + frete + cmv + operFixed + adsFixed + influencerFixed;
 
     const credFrete =
       regime === "normal" && channel.hasCredits ? frete * (channel.creditFretePercent / 100) : 0;
@@ -165,7 +167,6 @@ export function solvePOR(params: {
       credComissaoCoeff +
       incentiveCredCoeff -
       cardFeeCoeff -
-      influencerCoeff +
       rebateCoeff -
       m;
 
@@ -192,8 +193,8 @@ export function solvePOR(params: {
 
   const operR$ = operMode === "percent" ? POR * (operValue / 100) : operValue;
   const adsR$ = adsMode === "percent" ? POR * (adsValue / 100) : adsValue;
-  const cardFeeR$ = POR * (cardFeePercent / 100);
-  const influencerR$ = POR * (influencerPercent / 100);
+  const cardFeeR$ = POR * ((cardFeePercent ?? channel.cardFeePercent ?? 0) / 100);
+  const influencerR$ = influencerMode === "percent" ? POR * (influencerValue / 100) : influencerValue;
 
   const credFrete =
     regime === "normal" && channel.hasCredits ? frete * (channel.creditFretePercent / 100) : 0;
@@ -203,7 +204,7 @@ export function solvePOR(params: {
       ? comissaoVal * (channel.creditCommissionPercent / 100)
       : 0;
 
-  const credIncentivo = regime === "normal" ? POR * (incentiveCreditPercent / 100) : 0;
+  const credIncentivo = regime === "normal" ? POR * ((incentiveCreditPercent ?? channel.incentiveCreditPercent ?? 0) / 100) : 0;
 
   const rebateVal = rebateMode === "percent" ? POR * (rebateValue / 100) : rebateValue;
 
