@@ -9,7 +9,7 @@ import { revalidatePath } from "next/cache";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-type ChannelKey = "magalu" | "meli" | "shopee" | "site" | "outros";
+type ChannelKey = "magalu" | "meli" | "shopee" | "site" | "outros" | "site_modifika";
 type Regime = "normal" | "simples";
 type MeliPlan = "classic" | "premium";
 
@@ -38,6 +38,7 @@ function defaultRuleSet(): RuleSetData {
       meli: { enabled: true, commissionPercent: 0, taxFixed: 0, targetMarginPercent: 13, hasCredits: true, creditFretePercent: 21.25, creditCommissionPercent: 9.25 },
       shopee: { enabled: true, commissionPercent: 0, taxFixed: 0, targetMarginPercent: 15, hasCredits: true, creditFretePercent: 21.25, creditCommissionPercent: 9.25 },
       site: { enabled: true, commissionPercent: 1, taxFixed: 0, targetMarginPercent: 20, hasCredits: false, creditFretePercent: 0, creditCommissionPercent: 0 },
+      site_modifika: { enabled: true, commissionPercent: 1, taxFixed: 0, targetMarginPercent: 15, hasCredits: true, mainTaxPercent: 18, pisCofinsPercent: 6, creditFretePercent: 12, creditCommissionPercent: 0, incentiveCreditPercent: 2, cardFeePercent: 10, influencerPercent: 5 },
       outros: { enabled: true, commissionPercent: 18, taxFixed: 0, targetMarginPercent: 20, hasCredits: true, creditFretePercent: 21.25, creditCommissionPercent: 9.25 },
     },
     meli: { plan: "premium", classicActive: true, premiumActive: true, classicCommissionPercent: 11.5, premiumCommissionPercent: 16.5 },
