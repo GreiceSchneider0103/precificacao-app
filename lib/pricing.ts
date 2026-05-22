@@ -90,6 +90,10 @@ export function solvePOR(params: {
     hasCredits: boolean;
     creditFretePercent: number;
     creditCommissionPercent: number;
+    pisCofinsPercent?: number;
+    cardFeePercent?: number;
+    influencerPercent?: number;
+    incentiveCreditPercent?: number;
   };
   pisCofinsOverride?: number;
   cardFeePercent?: number;
@@ -125,12 +129,15 @@ export function solvePOR(params: {
     incentiveCreditPercent = 0,
   } = params;
 
+  const cardFeeVal = cardFeePercent ?? channel.cardFeePercent ?? 0;
+  const incCredVal = incentiveCreditPercent ?? channel.incentiveCreditPercent ?? 0;
+
   const m = clamp(margemAlvoPercent / 100, 0, 0.95);
 
   const POR = (() => {
     const c = channel.commissionPercent / 100;
     const t = channel.mainTaxPercent / 100;
-    const pVal = (pisCofinsOverride ?? 9.25) / 100;
+    const pVal = (pisCofinsOverride ?? channel.pisCofinsPercent ?? 9.25) / 100;
 
     const pisCoeff = regime === "normal" ? pVal * (1 - t) : 0;
 
@@ -140,10 +147,11 @@ export function solvePOR(params: {
     const operFixed = operMode === "fixed" ? operValue : 0;
     const adsFixed = adsMode === "fixed" ? adsValue : 0;
 
-    const cardFeeCoeff = cardFeePercent / 100;
-    const influencerCoeff = influencerMode === "percent" ? influencerValue / 100 : 0;
-    const influencerFixed = influencerMode === "fixed" ? influencerValue : 0;
-    const incentiveCredCoeff = regime === "normal" ? incentiveCreditPercent / 100 : 0;
+    const cardFeeCoeff = cardFeeVal / 100;
+    const infVal = influencerValue ?? (influencerMode === "percent" ? channel.influencerPercent ?? 0 : 0);
+    const influencerCoeff = influencerMode === "percent" ? infVal / 100 : 0;
+    const influencerFixed = influencerMode === "fixed" ? infVal : 0;
+    const incentiveCredCoeff = regime === "normal" ? incCredVal / 100 : 0;
 
     const fixedCosts = channel.taxFixed + frete + cmv + operFixed + adsFixed + influencerFixed;
 
@@ -190,13 +198,15 @@ export function solvePOR(params: {
 
   const comissaoVal = POR * (channel.commissionPercent / 100);
   const impostoVal = POR * (channel.mainTaxPercent / 100);
-  const pVal = (pisCofinsOverride ?? 9.25) / 100;
+  const pVal = (pisCofinsOverride ?? channel.pisCofinsPercent ?? 9.25) / 100;
   const pisVal = regime === "normal" ? pVal * (POR - impostoVal) : 0;
 
   const operR$ = operMode === "percent" ? POR * (operValue / 100) : operValue;
   const adsR$ = adsMode === "percent" ? POR * (adsValue / 100) : adsValue;
-  const cardFeeR$ = POR * (cardFeePercent / 100);
-  const influencerR$ = influencerMode === "percent" ? POR * (influencerValue / 100) : influencerValue;
+  const cardFeeR$ = POR * (cardFeeVal / 100);
+
+  const infValFinal = influencerValue ?? (influencerMode === "percent" ? channel.influencerPercent ?? 0 : 0);
+  const influencerR$ = influencerMode === "percent" ? POR * (infValFinal / 100) : infValFinal;
 
   const credFrete =
     regime === "normal" && channel.hasCredits ? frete * (channel.creditFretePercent / 100) : 0;
@@ -206,7 +216,7 @@ export function solvePOR(params: {
       ? comissaoVal * (channel.creditCommissionPercent / 100)
       : 0;
 
-  const credIncentivo = regime === "normal" ? POR * (incentiveCreditPercent / 100) : 0;
+  const credIncentivo = regime === "normal" ? POR * (incCredVal / 100) : 0;
 
   const rebateVal = rebateMode === "percent" ? POR * (rebateValue / 100) : rebateValue;
 

@@ -83,7 +83,7 @@ function pickShopeeTier(sh: { tiers: ShopeeTier[] } | undefined, price: number):
 }
 
 function solvePOR(params: SolvePORParams): BreakdownResult {
-  const { cmv, markupBase, frete, operMode, operValue, adsMode, adsValue, margemAlvoPercent, channel, regime, rebateMode, rebateValue, cardFeePercent, influencerMode = "percent", influencerValue = 0, incentiveCreditPercent } = params;
+  const { cmv, markupBase, frete, operMode, operValue, adsMode, adsValue, margemAlvoPercent, channel, regime, rebateMode, rebateValue, cardFeePercent, influencerMode = "percent", influencerValue, incentiveCreditPercent } = params;
   const m = clamp(margemAlvoPercent / 100, 0, 0.95);
   const pVal = (channel.pisCofinsPercent ?? (regime === "normal" ? 9.25 : 0)) / 100;
   const porPago = (() => {
@@ -92,8 +92,11 @@ function solvePOR(params: SolvePORParams): BreakdownResult {
     const operCoeff = operMode === "percent" ? operValue / 100 : 0, adsCoeff = adsMode === "percent" ? adsValue / 100 : 0;
     const operFixed = operMode === "fixed" ? operValue : 0, adsFixed = adsMode === "fixed" ? adsValue : 0;
     const cardFeeCoeff = (cardFeePercent ?? channel.cardFeePercent ?? 0) / 100;
-    const influencerCoeff = influencerMode === "percent" ? influencerValue / 100 : 0; // Corrigido: influencerCoeff é um custo, deve ser subtraído
-    const influencerFixed = influencerMode === "fixed" ? influencerValue : 0;
+
+    const infVal = influencerValue ?? (influencerMode === "percent" ? channel.influencerPercent ?? 0 : 0);
+    const influencerCoeff = influencerMode === "percent" ? infVal / 100 : 0;
+    const influencerFixed = influencerMode === "fixed" ? infVal : 0;
+
     const credFrete = regime === "normal" && channel.hasCredits ? frete * (channel.creditFretePercent / 100) : 0;
     const credComissaoCoeff = regime === "normal" && channel.hasCredits ? c * (channel.creditCommissionPercent / 100) : 0;
     const credIncentivoCoeff = regime === "normal" ? (incentiveCreditPercent ?? channel.incentiveCreditPercent ?? 0) / 100 : 0;
@@ -109,7 +112,10 @@ function solvePOR(params: SolvePORParams): BreakdownResult {
   const operR$ = operMode === "percent" ? porPago * (operValue / 100) : operValue;
   const adsR$ = adsMode === "percent" ? porPago * (adsValue / 100) : adsValue;
   const cardFeeR$ = porPago * ((cardFeePercent ?? channel.cardFeePercent ?? 0) / 100);
-  const influencerR$ = influencerMode === "percent" ? porPago * (influencerValue / 100) : influencerValue; // Corrigido: influencer é um custo, deve ser subtraído
+
+  const infValFinal = influencerValue ?? (influencerMode === "percent" ? channel.influencerPercent ?? 0 : 0);
+  const influencerR$ = influencerMode === "percent" ? porPago * (infValFinal / 100) : infValFinal;
+
   const credFrete = regime === "normal" && channel.hasCredits ? frete * (channel.creditFretePercent / 100) : 0;
   const credComissao = regime === "normal" && channel.hasCredits ? comissaoVal * (channel.creditCommissionPercent / 100) : 0;
   const credIncentivo = regime === "normal" ? porPago * ((incentiveCreditPercent ?? channel.incentiveCreditPercent ?? 0) / 100) : 0;
@@ -161,18 +167,19 @@ function mapRuleSetToSettings(rs: RawRuleSet): Settings {
   for (const k of keys) {
     const inc: RawChannelData = (base.channels && base.channels[k]) || {};
     const mp = k !== "site" && k !== "site_modifika";
+    const isModifika = k === "site_modifika";
     channels[k] = { 
-      commissionPercent: Number(inc.commissionPercent ?? 0), 
+      commissionPercent: Number(inc.commissionPercent ?? (isModifika ? 1 : 0)), 
       taxFixed: Number(inc.taxFixed ?? 0), 
-      mainTaxPercent: Number(inc.mainTaxPercent ?? mainTax), 
+      mainTaxPercent: Number(inc.mainTaxPercent ?? (isModifika ? 18 : mainTax)), 
       hasCredits: typeof inc.hasCredits === "boolean" ? inc.hasCredits : (k === "site_modifika" || mp), 
       creditFretePercent: Number(inc.creditFretePercent ?? (k === "site_modifika" ? 12 : (mp ? 21.25 : 0))), 
       creditCommissionPercent: Number(inc.creditCommissionPercent ?? (mp ? 9.25 : 0)), 
-      targetMarginPercent: Number(inc.targetMarginPercent ?? 10),
-      pisCofinsPercent: inc.pisCofinsPercent !== undefined ? Number(inc.pisCofinsPercent) : undefined,
-      cardFeePercent: inc.cardFeePercent !== undefined ? Number(inc.cardFeePercent) : undefined,
-      influencerPercent: inc.influencerPercent !== undefined ? Number(inc.influencerPercent) : undefined,
-      incentiveCreditPercent: inc.incentiveCreditPercent !== undefined ? Number(inc.incentiveCreditPercent) : undefined,
+      targetMarginPercent: Number(inc.targetMarginPercent ?? (isModifika ? 15 : 10)),
+      pisCofinsPercent: inc.pisCofinsPercent !== undefined ? Number(inc.pisCofinsPercent) : (isModifika ? 6 : undefined),
+      cardFeePercent: inc.cardFeePercent !== undefined ? Number(inc.cardFeePercent) : (isModifika ? 10 : undefined),
+      influencerPercent: inc.influencerPercent !== undefined ? Number(inc.influencerPercent) : (isModifika ? 5 : undefined),
+      incentiveCreditPercent: inc.incentiveCreditPercent !== undefined ? Number(inc.incentiveCreditPercent) : (isModifika ? 2 : undefined),
     };
     if (k === "meli") channels[k].meli = { classicCommissionPercent: base.meli?.classicCommissionPercent ?? 11.5, premiumCommissionPercent: base.meli?.premiumCommissionPercent ?? 16.5 };
     if (k === "shopee") { const tiers = Array.isArray(base.shopeeTiers) ? base.shopeeTiers : []; channels[k].shopee = { mode: tiers.length ? "tiered" : "flat", tiers }; }
@@ -340,7 +347,7 @@ export default function PrecificacaoPage() {
       cmv: effectiveCmv, markupBase, frete: parseNumberPt(frete), operMode, operValue: parseNumberPt(operValue), adsMode, adsValue: parseNumberPt(adsValue), 
       margemAlvoPercent: parseNumberPt(margemEfetiva) || (baseCh.targetMarginPercent ?? 20), channel: ch, regime: regimeFinal, rebateMode, rebateValue: parseNumberPt(rebateValue), descontoMode, descontoValue: parseNumberPt(descontoValue),
       cardFeePercent: cardFeeValue.trim() ? parseNumberPt(cardFeeValue) : undefined,
-      influencerMode, influencerValue: parseNumberPt(influencerValue),
+      influencerMode, influencerValue: influencerValue.trim() ? parseNumberPt(influencerValue) : undefined,
       incentiveCreditPercent: incentiveCreditOverride.trim() ? parseNumberPt(incentiveCreditOverride) : undefined
     };
     if (effectiveChannel === "shopee" && !commissionOverride.trim() && !fixedOverride.trim() && baseCh.shopee?.mode === "tiered") return solveWithShopeeTiered({ ...common, channelRaw: baseCh });
@@ -595,22 +602,22 @@ export default function PrecificacaoPage() {
                   </div>
                 </div>
                 <div className="mt-4 space-y-2 text-sm">
-                  <Row label={`${effectiveChannel === 'site_modifika' ? 'Taxa Marketplace' : 'Comissão'} (${result.channelUsed.commissionPercent.toFixed(2)}%)`} value={`R$ ${fmtPt(result.breakdown.comissao)}`} />
-                  <Row label={`Imposto (${result.channelUsed.mainTaxPercent.toFixed(2)}%)`} value={`R$ ${fmtPt(result.breakdown.imposto)}`} />
-                  <Row label={`PIS/COFINS ${result.regimeUsed === "normal" ? `(${(result.channelUsed.pisCofinsPercent ?? 9.25).toString().replace(".", ",")}%)` : "(não aplica)"}`} value={`R$ ${fmtPt(result.breakdown.pisCofins)}`} />
-                  <Row label="Taxa fixa canal" value={`R$ ${fmtPt(result.breakdown.taxaFixa)}`} />
+                  {result.breakdown.comissao >= 0.005 && <Row label={`${effectiveChannel === 'site_modifika' ? 'Taxa Marketplace' : 'Comissão'} (${result.channelUsed.commissionPercent.toFixed(2)}%)`} value={`R$ ${fmtPt(result.breakdown.comissao)}`} />}
+                  {result.breakdown.imposto >= 0.005 && <Row label={`Imposto (${result.channelUsed.mainTaxPercent.toFixed(2)}%)`} value={`R$ ${fmtPt(result.breakdown.imposto)}`} />}
+                  {result.breakdown.pisCofins >= 0.005 && <Row label={`PIS/COFINS ${result.regimeUsed === "normal" ? `(${(result.channelUsed.pisCofinsPercent ?? 9.25).toString().replace(".", ",")}%)` : "(não aplica)"}`} value={`R$ ${fmtPt(result.breakdown.pisCofins)}`} />}
+                  {result.breakdown.taxaFixa >= 0.005 && <Row label="Taxa fixa canal" value={`R$ ${fmtPt(result.breakdown.taxaFixa)}`} />}
                   <div className="my-3 h-px bg-white/10" />
                   <Row label="Frete" value={`R$ ${fmtPt(result.breakdown.frete)}`} />
                   <Row label="CMV" value={`R$ ${fmtPt(result.breakdown.cmv)}`} />
-                  <Row label="Custos operacionais" value={`R$ ${fmtPt(result.breakdown.operacionais)}`} />
-                  <Row label="Ads" value={`R$ ${fmtPt(result.breakdown.ads)}`} />
-                  {(result.breakdown.taxaCartao > 0 || effectiveChannel === 'site_modifika') && <Row label="Taxa de Cartão" value={`R$ ${fmtPt(result.breakdown.taxaCartao)}`} />}
-                  {(result.breakdown.influencer > 0 || effectiveChannel === 'site_modifika') && <Row label="Influencer" value={`R$ ${fmtPt(result.breakdown.influencer)}`} />}
+                  {result.breakdown.operacionais >= 0.005 && <Row label="Custos operacionais" value={`R$ ${fmtPt(result.breakdown.operacionais)}`} />}
+                  {result.breakdown.ads >= 0.005 && <Row label="Ads" value={`R$ ${fmtPt(result.breakdown.ads)}`} />}
+                  {result.breakdown.taxaCartao >= 0.005 && <Row label="Taxa de Cartão" value={`R$ ${fmtPt(result.breakdown.taxaCartao)}`} />}
+                  {result.breakdown.influencer >= 0.005 && <Row label="Influencer" value={`R$ ${fmtPt(result.breakdown.influencer)}`} />}
                   <div className="my-3 h-px bg-white/10" />
-                  <Row label="Crédito de frete" value={`R$ ${fmtPt(result.breakdown.creditoFrete)}`} />
-                  <Row label="Crédito de comissão" value={`R$ ${fmtPt(result.breakdown.creditoComissao)}`} />
-                  {(result.breakdown.creditoIncentivo > 0 || effectiveChannel === 'site_modifika') && <Row label="Crédito Incentivo" value={`R$ ${fmtPt(result.breakdown.creditoIncentivo)}`} />}
-                  <Row label="Rebate" value={`R$ ${fmtPt(result.breakdown.rebate)}`} />
+                  {result.breakdown.creditoFrete >= 0.005 && <Row label="Crédito de frete" value={`R$ ${fmtPt(result.breakdown.creditoFrete)}`} />}
+                  {result.breakdown.creditoComissao >= 0.005 && <Row label="Crédito de comissão" value={`R$ ${fmtPt(result.breakdown.creditoComissao)}`} />}
+                  {result.breakdown.creditoIncentivo >= 0.005 && <Row label="Crédito Incentivo" value={`R$ ${fmtPt(result.breakdown.creditoIncentivo)}`} />}
+                  {result.breakdown.rebate !== 0 && <Row label="Rebate" value={`R$ ${fmtPt(result.breakdown.rebate)}`} />}
                   <div className="my-3 h-px bg-white/10" />
                   <Row label="Receita líquida" value={`R$ ${fmtPt(result.breakdown.receitaLiquida)}`} strong />
                   <Row label="Margem de contribuição" value={`R$ ${fmtPt(result.breakdown.margemContrib)}`} strong />
