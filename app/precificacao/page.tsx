@@ -15,6 +15,10 @@ type Coupon = { id: string; name: string; code: string; discountMode: "percent" 
 type ChannelConfig = {
   commissionPercent: number; taxFixed: number; mainTaxPercent: number;
   hasCredits: boolean; creditFretePercent: number; creditCommissionPercent: number; targetMarginPercent: number;
+  pisCofinsPercent?: number;
+  cardFeePercent?: number;
+  influencerPercent?: number;
+  incentiveCreditPercent?: number;
   meli?: { classicCommissionPercent: number; premiumCommissionPercent: number };
   shopee?: { mode: "flat" | "tiered"; tiers: ShopeeTier[] };
 };
