@@ -595,21 +595,21 @@ export default function PrecificacaoPage() {
                   </div>
                 </div>
                 <div className="mt-4 space-y-2 text-sm">
-                  <Row label={`Comissão (${result.channelUsed.commissionPercent.toFixed(2)}%)`} value={`R$ ${fmtPt(result.breakdown.comissao)}`} />
+                  <Row label={`${effectiveChannel === 'site_modifika' ? 'Taxa Marketplace' : 'Comissão'} (${result.channelUsed.commissionPercent.toFixed(2)}%)`} value={`R$ ${fmtPt(result.breakdown.comissao)}`} />
                   <Row label={`Imposto (${result.channelUsed.mainTaxPercent.toFixed(2)}%)`} value={`R$ ${fmtPt(result.breakdown.imposto)}`} />
-                  <Row label={`PIS/COFINS ${result.regimeUsed === "normal" ? "(9,25%)" : "(não aplica)"}`} value={`R$ ${fmtPt(result.breakdown.pisCofins)}`} />
+                  <Row label={`PIS/COFINS ${result.regimeUsed === "normal" ? `(${(result.channelUsed.pisCofinsPercent ?? 9.25).toString().replace(".", ",")}%)` : "(não aplica)"}`} value={`R$ ${fmtPt(result.breakdown.pisCofins)}`} />
                   <Row label="Taxa fixa canal" value={`R$ ${fmtPt(result.breakdown.taxaFixa)}`} />
                   <div className="my-3 h-px bg-white/10" />
                   <Row label="Frete" value={`R$ ${fmtPt(result.breakdown.frete)}`} />
                   <Row label="CMV" value={`R$ ${fmtPt(result.breakdown.cmv)}`} />
                   <Row label="Custos operacionais" value={`R$ ${fmtPt(result.breakdown.operacionais)}`} />
                   <Row label="Ads" value={`R$ ${fmtPt(result.breakdown.ads)}`} />
-                  {result.breakdown.taxaCartao > 0 && <Row label="Taxa de Cartão" value={`R$ ${fmtPt(result.breakdown.taxaCartao)}`} />}
-                  {result.breakdown.influencer > 0 && <Row label="Influencer" value={`R$ ${fmtPt(result.breakdown.influencer)}`} />}
+                  {(result.breakdown.taxaCartao > 0 || effectiveChannel === 'site_modifika') && <Row label="Taxa de Cartão" value={`R$ ${fmtPt(result.breakdown.taxaCartao)}`} />}
+                  {(result.breakdown.influencer > 0 || effectiveChannel === 'site_modifika') && <Row label="Influencer" value={`R$ ${fmtPt(result.breakdown.influencer)}`} />}
                   <div className="my-3 h-px bg-white/10" />
                   <Row label="Crédito de frete" value={`R$ ${fmtPt(result.breakdown.creditoFrete)}`} />
                   <Row label="Crédito de comissão" value={`R$ ${fmtPt(result.breakdown.creditoComissao)}`} />
-                  {result.breakdown.creditoIncentivo > 0 && <Row label="Crédito Incentivo" value={`R$ ${fmtPt(result.breakdown.creditoIncentivo)}`} />}
+                  {(result.breakdown.creditoIncentivo > 0 || effectiveChannel === 'site_modifika') && <Row label="Crédito Incentivo" value={`R$ ${fmtPt(result.breakdown.creditoIncentivo)}`} />}
                   <Row label="Rebate" value={`R$ ${fmtPt(result.breakdown.rebate)}`} />
                   <div className="my-3 h-px bg-white/10" />
                   <Row label="Receita líquida" value={`R$ ${fmtPt(result.breakdown.receitaLiquida)}`} strong />
