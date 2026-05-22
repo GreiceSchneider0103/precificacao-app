@@ -83,7 +83,7 @@ function pickShopeeTier(sh: { tiers: ShopeeTier[] } | undefined, price: number):
 }
 
 function solvePOR(params: SolvePORParams): BreakdownResult {
-  const { cmv, markupBase, frete, operMode, operValue, adsMode, adsValue, margemAlvoPercent, channel, regime, rebateMode, rebateValue } = params;
+  const { cmv, markupBase, frete, operMode, operValue, adsMode, adsValue, margemAlvoPercent, channel, regime, rebateMode, rebateValue, cardFeePercent, influencerMode = "percent", influencerValue = 0, incentiveCreditPercent } = params;
   const m = clamp(margemAlvoPercent / 100, 0, 0.95);
   const pVal = (channel.pisCofinsPercent ?? (regime === "normal" ? 9.25 : 0)) / 100;
   const porPago = (() => {
@@ -91,14 +91,15 @@ function solvePOR(params: SolvePORParams): BreakdownResult {
     const pisCoeff = regime === "normal" ? pVal * (1 - t) : 0;
     const operCoeff = operMode === "percent" ? operValue / 100 : 0, adsCoeff = adsMode === "percent" ? adsValue / 100 : 0;
     const operFixed = operMode === "fixed" ? operValue : 0, adsFixed = adsMode === "fixed" ? adsValue : 0;
-    const cardFeeCoeff = (channel.cardFeePercent ?? 0) / 100;
-    const influencerCoeff = (channel.influencerPercent ?? 0) / 100;
+    const cardFeeCoeff = (cardFeePercent ?? channel.cardFeePercent ?? 0) / 100;
+    const influencerCoeff = influencerMode === "percent" ? influencerValue / 100 : 0; // Corrigido: influencerCoeff é um custo, deve ser subtraído
+    const influencerFixed = influencerMode === "fixed" ? influencerValue : 0;
     const credFrete = regime === "normal" && channel.hasCredits ? frete * (channel.creditFretePercent / 100) : 0;
     const credComissaoCoeff = regime === "normal" && channel.hasCredits ? c * (channel.creditCommissionPercent / 100) : 0;
-    const credIncentivoCoeff = regime === "normal" ? (channel.incentiveCreditPercent ?? 0) / 100 : 0;
+    const credIncentivoCoeff = regime === "normal" ? (incentiveCreditPercent ?? channel.incentiveCreditPercent ?? 0) / 100 : 0;
     const rebateFixed = rebateMode === "fixed" ? rebateValue : 0, rebateCoeff = rebateMode === "percent" ? rebateValue / 100 : 0;
     const leftCoeff = 1 - c - t - pisCoeff - operCoeff - adsCoeff - cardFeeCoeff - influencerCoeff + credComissaoCoeff + credIncentivoCoeff + rebateCoeff - m;
-    const right = channel.taxFixed + frete + cmv + operFixed + adsFixed - credFrete - rebateFixed;
+    const right = channel.taxFixed + frete + cmv + operFixed + adsFixed + influencerFixed - credFrete - rebateFixed;
     if (leftCoeff <= 0.000001) return 0;
     return right / leftCoeff;
   })();
@@ -107,11 +108,11 @@ function solvePOR(params: SolvePORParams): BreakdownResult {
   const pisVal = regime === "normal" ? pVal * (porPago - impostoVal) : 0;
   const operR$ = operMode === "percent" ? porPago * (operValue / 100) : operValue;
   const adsR$ = adsMode === "percent" ? porPago * (adsValue / 100) : adsValue;
-  const cardFeeR$ = porPago * ((channel.cardFeePercent ?? 0) / 100);
-  const influencerR$ = porPago * ((channel.influencerPercent ?? 0) / 100);
+  const cardFeeR$ = porPago * ((cardFeePercent ?? channel.cardFeePercent ?? 0) / 100);
+  const influencerR$ = influencerMode === "percent" ? porPago * (influencerValue / 100) : influencerValue; // Corrigido: influencer é um custo, deve ser subtraído
   const credFrete = regime === "normal" && channel.hasCredits ? frete * (channel.creditFretePercent / 100) : 0;
   const credComissao = regime === "normal" && channel.hasCredits ? comissaoVal * (channel.creditCommissionPercent / 100) : 0;
-  const credIncentivo = regime === "normal" ? porPago * ((channel.incentiveCreditPercent ?? 0) / 100) : 0;
+  const credIncentivo = regime === "normal" ? porPago * ((incentiveCreditPercent ?? channel.incentiveCreditPercent ?? 0) / 100) : 0;
   const rebateVal = rebateMode === "percent" ? porPago * (rebateValue / 100) : rebateValue;
   const mc = porPago - comissaoVal - impostoVal - pisVal - channel.taxFixed - frete - cmv - operR$ - adsR$ - cardFeeR$ - influencerR$ + credFrete + credComissao + credIncentivo + rebateVal;
   const precoDE = cmv * markupBase;

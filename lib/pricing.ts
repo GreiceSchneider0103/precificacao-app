@@ -93,7 +93,8 @@ export function solvePOR(params: {
   };
   pisCofinsOverride?: number;
   cardFeePercent?: number;
-  influencerPercent?: number;
+  influencerMode?: MoneyMode;
+  influencerValue?: number;
   incentiveCreditPercent?: number;
 
   regime: Regime;
@@ -118,10 +119,10 @@ export function solvePOR(params: {
     rebateMode,
     rebateValue,
     pisCofinsOverride,
-    cardFeePercent,
+    cardFeePercent = 0,
     influencerMode = "percent",
     influencerValue = 0,
-    incentiveCreditPercent,
+    incentiveCreditPercent = 0,
   } = params;
 
   const m = clamp(margemAlvoPercent / 100, 0, 0.95);
@@ -139,10 +140,10 @@ export function solvePOR(params: {
     const operFixed = operMode === "fixed" ? operValue : 0;
     const adsFixed = adsMode === "fixed" ? adsValue : 0;
 
-    const cardFeeCoeff = (cardFeePercent ?? channel.cardFeePercent ?? 0) / 100;
+    const cardFeeCoeff = cardFeePercent / 100;
     const influencerCoeff = influencerMode === "percent" ? influencerValue / 100 : 0;
     const influencerFixed = influencerMode === "fixed" ? influencerValue : 0;
-    const incentiveCredCoeff = regime === "normal" ? (incentiveCreditPercent ?? channel.incentiveCreditPercent ?? 0) / 100 : 0;
+    const incentiveCredCoeff = regime === "normal" ? incentiveCreditPercent / 100 : 0;
 
     const fixedCosts = channel.taxFixed + frete + cmv + operFixed + adsFixed + influencerFixed;
 
@@ -167,6 +168,7 @@ export function solvePOR(params: {
       credComissaoCoeff +
       incentiveCredCoeff -
       cardFeeCoeff -
+      influencerCoeff - // Corrigido: influencerCoeff é um custo, deve ser subtraído
       rebateCoeff -
       m;
 
@@ -193,7 +195,7 @@ export function solvePOR(params: {
 
   const operR$ = operMode === "percent" ? POR * (operValue / 100) : operValue;
   const adsR$ = adsMode === "percent" ? POR * (adsValue / 100) : adsValue;
-  const cardFeeR$ = POR * ((cardFeePercent ?? channel.cardFeePercent ?? 0) / 100);
+  const cardFeeR$ = POR * (cardFeePercent / 100);
   const influencerR$ = influencerMode === "percent" ? POR * (influencerValue / 100) : influencerValue;
 
   const credFrete =
@@ -204,7 +206,7 @@ export function solvePOR(params: {
       ? comissaoVal * (channel.creditCommissionPercent / 100)
       : 0;
 
-  const credIncentivo = regime === "normal" ? POR * ((incentiveCreditPercent ?? channel.incentiveCreditPercent ?? 0) / 100) : 0;
+  const credIncentivo = regime === "normal" ? POR * (incentiveCreditPercent / 100) : 0;
 
   const rebateVal = rebateMode === "percent" ? POR * (rebateValue / 100) : rebateValue;
 
@@ -217,9 +219,9 @@ export function solvePOR(params: {
     frete -
     cmv -
     operR$ -
-    adsR$ +
-    cardFeeR$ -
-    influencerR$ +
+    adsR$ -
+    cardFeeR$ - // Corrigido: taxaCartao é um custo, deve ser subtraído
+    influencerR$ + // Corrigido: Créditos e descontos abaixo são somados
     credFrete +
     credComissao +
     credIncentivo +
