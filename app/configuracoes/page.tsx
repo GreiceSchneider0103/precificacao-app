@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-type ChannelKey = "magalu" | "meli" | "shopee" | "site" | "outros";
+type ChannelKey = "magalu" | "meli" | "shopee" | "site" | "outros" | "site_modifika";
 type Regime = "normal" | "simples";
 type MeliPlan = "classic" | "premium";
 
@@ -25,6 +25,13 @@ type RuleSetData = {
       taxFixed: number;
       mainTaxPercent: number; // 18 ou 14 conforme regime
       targetMarginPercent: number; // margem desejada por canal
+      pisCofinsPercent?: number;
+      cardFeePercent?: number;
+      influencerPercent?: number;
+      incentiveCreditPercent?: number;
+      hasCredits?: boolean;
+      creditFretePercent?: number;
+      creditCommissionPercent?: number;
     }
   >;
 
@@ -610,6 +617,50 @@ export default function ConfiguracoesPage() {
               onChange={(v) => updateChannel("site", { mainTaxPercent: num(v, mainTax) })}
             />
             <Hint text="Padrão: 1%" />
+          </div>
+        </div>
+
+        {/* SITE MODIFIKA */}
+        <div className="rounded-2xl border p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold">Site Modifika</h3>
+            <label className="text-sm flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={draft.channels.site_modifika?.enabled ?? false}
+                onChange={(e) => updateChannel("site_modifika", { enabled: e.target.checked })}
+              />
+              Ativo
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <Field
+              label="Taxa % (marketplace)"
+              value={draft.channels.site_modifika?.commissionPercent ?? 1}
+              onChange={(v) => updateChannel("site_modifika", { commissionPercent: num(v, 1) })}
+            />
+            <Field
+              label="Imposto %"
+              value={draft.channels.site_modifika?.mainTaxPercent ?? 18}
+              onChange={(v) => updateChannel("site_modifika", { mainTaxPercent: num(v, 18) })}
+            />
+            <Field
+              label="PIS e Cofins %"
+              value={draft.channels.site_modifika?.pisCofinsPercent ?? 6}
+              onChange={(v) => updateChannel("site_modifika", { pisCofinsPercent: num(v, 6) })}
+            />
+            <Field
+              label="Margem desejada %"
+              value={draft.channels.site_modifika?.targetMarginPercent ?? 15}
+              onChange={(v) => updateChannel("site_modifika", { targetMarginPercent: num(v, 15) })}
+            />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <Field label="Taxa cartão %" value={draft.channels.site_modifika?.cardFeePercent ?? 10} onChange={(v) => updateChannel("site_modifika", { cardFeePercent: num(v, 10) })} />
+            <Field label="Influencer %" value={draft.channels.site_modifika?.influencerPercent ?? 5} onChange={(v) => updateChannel("site_modifika", { influencerPercent: num(v, 5) })} />
+            <Field label="Crédito frete %" value={draft.channels.site_modifika?.creditFretePercent ?? 12} onChange={(v) => updateChannel("site_modifika", { creditFretePercent: num(v, 12), hasCredits: true })} />
+            <Field label="Crédito incentivo %" value={draft.channels.site_modifika?.incentiveCreditPercent ?? 2} onChange={(v) => updateChannel("site_modifika", { incentiveCreditPercent: num(v, 2) })} />
           </div>
         </div>
 

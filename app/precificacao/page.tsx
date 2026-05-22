@@ -24,6 +24,10 @@ type Settings = { regime: Regime; ufOrigem: string; channels: Record<ChannelKey,
 type RawChannelData = {
   commissionPercent?: number | string; taxFixed?: number | string; mainTaxPercent?: number | string;
   hasCredits?: boolean; creditFretePercent?: number | string; creditCommissionPercent?: number | string; targetMarginPercent?: number | string;
+  pisCofinsPercent?: number | string;
+  cardFeePercent?: number | string;
+  influencerPercent?: number | string;
+  incentiveCreditPercent?: number | string;
 };
 
 type RawRuleSet = {
@@ -143,12 +147,24 @@ function mapRuleSetToSettings(rs: RawRuleSet): Settings {
   const base = rs || {};
   const regime: Regime = base.regime === "simples" ? "simples" : "normal";
   const mainTax = regime === "normal" ? 18 : 14;
-  const keys: ChannelKey[] = ["magalu", "meli", "shopee", "site", "outros"];
+  const keys: ChannelKey[] = ["magalu", "meli", "shopee", "site", "outros", "site_modifika"];
   const channels: Record<ChannelKey, ChannelConfig> = {} as Record<ChannelKey, ChannelConfig>;
   for (const k of keys) {
     const inc: RawChannelData = (base.channels && base.channels[k]) || {};
-    const mp = k !== "site";
-    channels[k] = { commissionPercent: Number(inc.commissionPercent ?? 0), taxFixed: Number(inc.taxFixed ?? 0), mainTaxPercent: Number(inc.mainTaxPercent ?? mainTax), hasCredits: typeof inc.hasCredits === "boolean" ? inc.hasCredits : mp, creditFretePercent: Number(inc.creditFretePercent ?? (mp ? 21.25 : 0)), creditCommissionPercent: Number(inc.creditCommissionPercent ?? (mp ? 9.25 : 0)), targetMarginPercent: Number(inc.targetMarginPercent ?? 10) };
+    const mp = k !== "site" && k !== "site_modifika";
+    channels[k] = { 
+      commissionPercent: Number(inc.commissionPercent ?? 0), 
+      taxFixed: Number(inc.taxFixed ?? 0), 
+      mainTaxPercent: Number(inc.mainTaxPercent ?? mainTax), 
+      hasCredits: typeof inc.hasCredits === "boolean" ? inc.hasCredits : (k === "site_modifika" || mp), 
+      creditFretePercent: Number(inc.creditFretePercent ?? (k === "site_modifika" ? 12 : (mp ? 21.25 : 0))), 
+      creditCommissionPercent: Number(inc.creditCommissionPercent ?? (mp ? 9.25 : 0)), 
+      targetMarginPercent: Number(inc.targetMarginPercent ?? 10),
+      pisCofinsPercent: inc.pisCofinsPercent !== undefined ? Number(inc.pisCofinsPercent) : undefined,
+      cardFeePercent: inc.cardFeePercent !== undefined ? Number(inc.cardFeePercent) : undefined,
+      influencerPercent: inc.influencerPercent !== undefined ? Number(inc.influencerPercent) : undefined,
+      incentiveCreditPercent: inc.incentiveCreditPercent !== undefined ? Number(inc.incentiveCreditPercent) : undefined,
+    };
     if (k === "meli") channels[k].meli = { classicCommissionPercent: base.meli?.classicCommissionPercent ?? 11.5, premiumCommissionPercent: base.meli?.premiumCommissionPercent ?? 16.5 };
     if (k === "shopee") { const tiers = Array.isArray(base.shopeeTiers) ? base.shopeeTiers : []; channels[k].shopee = { mode: tiers.length ? "tiered" : "flat", tiers }; }
   }
