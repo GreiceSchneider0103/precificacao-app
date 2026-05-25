@@ -354,7 +354,7 @@ export default function PrecificacaoPage() {
     };
     if (effectiveChannel === "shopee" && !commissionOverride.trim() && !fixedOverride.trim() && baseCh.shopee?.mode === "tiered") return solveWithShopeeTiered({ ...common, channelRaw: baseCh });
     return { ...solvePOR(common), channelUsed: ch, regimeUsed: regimeFinal };
-  }, [settings, effectiveCmv, effectiveChannel, meliMode, magaluShipMode, frete, operMode, operValue, adsMode, adsValue, margemEfetiva, regimeOverride, descontoMode, descontoValue, rebateMode, rebateValue, commissionOverride, taxOverride, fixedOverride, creditFreteOverride, creditComissaoOverride]);
+  }, [settings, effectiveCmv, effectiveMarkup, effectiveChannel, meliMode, magaluShipMode, frete, operMode, operValue, adsMode, adsValue, margemEfetiva, regimeOverride, descontoMode, descontoValue, rebateMode, rebateValue, commissionOverride, taxOverride, fixedOverride, creditFreteOverride, creditComissaoOverride]);
 
   const alerts = useMemo(() => {
     if (!result) return [];
