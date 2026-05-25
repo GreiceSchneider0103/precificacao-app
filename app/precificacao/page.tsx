@@ -206,6 +206,7 @@ export default function PrecificacaoPage() {
   const [query, setQuery] = useState("");
   const [selectedSku, setSelectedSku] = useState<string | null>(null);
   const [manualName, setManualName] = useState("");
+  const [manualMarkup, setManualMarkup] = useState("");
   const [manualCmv, setManualCmv] = useState("");
   const [channel, setChannel] = useState<ChannelKey>("magalu");
   const [regimeOverride, setRegimeOverride] = useState<"default" | Regime>("default");
@@ -229,7 +230,7 @@ export default function PrecificacaoPage() {
   const [creditFreteOverride, setCreditFreteOverride] = useState("");
   const [creditComissaoOverride, setCreditComissaoOverride] = useState("");
 
-  const markupBase = 4.3;
+  const effectiveMarkup = manualMarkup.trim() ? parseNumberPt(manualMarkup) : 4.3;
 
   // ✅ FIX 1: margem por canal via useMemo derivado — sem setState em useEffect
   const margemDefault = useMemo(() => {
@@ -285,6 +286,7 @@ export default function PrecificacaoPage() {
       const d = JSON.parse(raw) as Record<string, string>;
       if (d.query) setQuery(d.query); if (d.selectedSku) setSelectedSku(d.selectedSku);
       if (d.manualName) setManualName(d.manualName); if (d.manualCmv) setManualCmv(d.manualCmv);
+      if (d.manualMarkup) setManualMarkup(d.manualMarkup);
       if (d.channel) setChannel(d.channel);
       if (d.meliMode === "classic" || d.meliMode === "premium") setMeliMode(d.meliMode);
       if (d.magaluShipMode === "proprio" || d.magaluShipMode === "full") setMagaluShipMode(d.magaluShipMode);
@@ -344,7 +346,7 @@ export default function PrecificacaoPage() {
     const creditCommissionPercent = creditComissaoOverride.trim() ? parseNumberPt(creditComissaoOverride) : baseCh.creditCommissionPercent;
     const ch = { commissionPercent, taxFixed, mainTaxPercent, hasCredits: baseCh.hasCredits, creditFretePercent, creditCommissionPercent, pisCofinsPercent: (baseCh as any).pisCofinsPercent, cardFeePercent: (baseCh as any).cardFeePercent, influencerPercent: (baseCh as any).influencerPercent, incentiveCreditPercent: (baseCh as any).incentiveCreditPercent };
     const common: SolvePORParams = { 
-      cmv: effectiveCmv, markupBase, frete: parseNumberPt(frete), operMode, operValue: parseNumberPt(operValue), adsMode, adsValue: parseNumberPt(adsValue), 
+      cmv: effectiveCmv, markupBase: effectiveMarkup, frete: parseNumberPt(frete), operMode, operValue: parseNumberPt(operValue), adsMode, adsValue: parseNumberPt(adsValue), 
       margemAlvoPercent: parseNumberPt(margemEfetiva) || (baseCh.targetMarginPercent ?? 20), channel: ch, regime: regimeFinal, rebateMode, rebateValue: parseNumberPt(rebateValue), descontoMode, descontoValue: parseNumberPt(descontoValue),
       cardFeePercent: cardFeeValue.trim() ? parseNumberPt(cardFeeValue) : undefined,
       influencerMode, influencerValue: influencerValue.trim() ? parseNumberPt(influencerValue) : undefined,
@@ -361,7 +363,7 @@ export default function PrecificacaoPage() {
     if (result.breakdown.margemPct < 0) list.push({ type: "bad", text: "Prejuízo: margem negativa." });
     if (result.breakdown.margemPct + 0.01 < alvo) list.push({ type: "warn", text: "Margem abaixo da meta." });
     if (result.POR_sugerido < effectiveCmv) list.push({ type: "bad", text: "POR abaixo do CMV." });
-    if (commissionOverride.trim() || taxOverride.trim() || fixedOverride.trim()) list.push({ type: "warn", text: "Overrides ativos." });
+    if (commissionOverride.trim() || taxOverride.trim() || fixedOverride.trim()) list.push({ type: "warn", text: "Ajustes especiais ativos" });
     return list;
   }, [result, margemEfetiva, effectiveCmv, commissionOverride, taxOverride, fixedOverride]);
 
@@ -377,7 +379,7 @@ export default function PrecificacaoPage() {
   }
 
   function resetForNewPricing() {
-    setQuery(""); setSelectedSku(null); setManualName(""); setManualCmv(""); setMargemDirty(false);
+    setQuery(""); setSelectedSku(null); setManualName(""); setManualCmv(""); setManualMarkup(""); setMargemDirty(false);
     setDescontoValue("0"); setRebateValue("0"); setCommissionOverride(""); setTaxOverride("");
     setFixedOverride(""); setCreditFreteOverride(""); setCreditComissaoOverride("");
   }
@@ -441,8 +443,8 @@ export default function PrecificacaoPage() {
                 <p className="text-xs font-semibold text-white/60 uppercase tracking-wide">Produto manual<InfoTip text="O CMV é obrigatório para o cálculo." /></p>
                 <div className="grid gap-3 md:grid-cols-2">
                   <label className="grid gap-1">
-                    <span className="text-xs text-white/60">Nome do produto</span>
-                    <input value={manualName} onChange={(e) => setManualName(e.target.value)} placeholder="ex: Poltrona Lisa NH" className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60" />
+                    <span className="text-xs text-white/60">Markup desejado (DE)<InfoTip text="Multiplicador do CMV para o preço DE. Padrão: 4,3" /></span>
+                    <input value={manualMarkup} onChange={(e) => setManualMarkup(e.target.value)} inputMode="decimal" placeholder="ex: 4,3" className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60" />
                   </label>
                   <label className="grid gap-1">
                     <span className="text-xs text-white/60">CMV (R$) <span className="text-rose-400">*</span></span>
@@ -481,19 +483,6 @@ export default function PrecificacaoPage() {
                   ))}
                 </div>
                 <p className="mt-2 text-[11px] text-white/50">Comissões puxadas das Configurações.</p>
-              </div>
-            )}
-
-            {effectiveChannel === "magalu" && (
-              <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                <p className="text-xs text-white/60 font-semibold mb-2">Modalidade de envio — Magalu</p>
-                <div className="flex gap-2">
-                  {(["proprio", "full"] as const).map((m) => (
-                    <button key={m} type="button" onClick={() => setMagaluShipMode(m)} className={magaluShipMode === m ? "rounded-xl bg-white/15 px-3 py-2 text-xs font-semibold ring-1 ring-white/10" : "rounded-xl bg-white/5 px-3 py-2 text-xs font-semibold text-white/70 ring-1 ring-white/10 hover:bg-white/10"}>
-                      {m === "proprio" ? "Envio próprio" : "Full Magalu"}
-                    </button>
-                  ))}
-                </div>
               </div>
             )}
 
@@ -581,7 +570,7 @@ export default function PrecificacaoPage() {
               <>
                 {alerts.length > 0 && <div className="mt-4 space-y-2">{alerts.map((a, i) => <div key={i} className={a.type === "bad" ? "rounded-xl border border-rose-500/25 bg-rose-500/10 px-4 py-2 text-sm text-rose-100" : "rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-2 text-sm text-amber-100"}>{a.text}</div>)}</div>}
                 <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-5">
-                  <p className="text-xs text-white/60">Preço DE (CMV × {markupBase.toFixed(1)})</p>
+                  <p className="text-xs text-white/60">Preço DE (CMV × {effectiveMarkup.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 2 })})</p>
                   <p className="mt-1 text-2xl font-semibold">R$ {fmtPt(result.precoDE)}</p>
                   <div className="mt-4 flex items-center justify-between gap-3">
                     <div>
