@@ -230,6 +230,33 @@ export default function PrecificacaoPage() {
   const [creditFreteOverride, setCreditFreteOverride] = useState("");
   const [creditComissaoOverride, setCreditComissaoOverride] = useState("");
 
+  // Estados aplicados para cards que exigem confirmação manual
+  const [appliedCustos, setAppliedCustos] = useState({
+    operMode: "fixed" as MoneyMode,
+    operValue: "0,00",
+    adsMode: "fixed" as MoneyMode,
+    adsValue: "0,00",
+    cardFeeValue: "",
+    influencerMode: "percent" as MoneyMode,
+    influencerValue: "",
+    descontoMode: "percent" as MoneyMode,
+    descontoValue: "0",
+    rebateMode: "percent" as MoneyMode,
+    rebateValue: "0"
+  });
+
+  const [appliedAjustes, setAppliedAjustes] = useState({
+    commissionOverride: "",
+    taxOverride: "",
+    fixedOverride: "",
+    creditFreteOverride: "",
+    creditComissaoOverride: "",
+    incentiveCreditOverride: ""
+  });
+
+  const handleApplyCustos = () => setAppliedCustos({ operMode, operValue, adsMode, adsValue, cardFeeValue, influencerMode, influencerValue, descontoMode, descontoValue, rebateMode, rebateValue });
+  const handleApplyAjustes = () => setAppliedAjustes({ commissionOverride, taxOverride, fixedOverride, creditFreteOverride, creditComissaoOverride, incentiveCreditOverride });
+
   const effectiveMarkup = manualMarkup.trim() ? parseNumberPt(manualMarkup) : 4.3;
 
   // ✅ FIX 1: margem por canal via useMemo derivado — sem setState em useEffect
@@ -307,6 +334,25 @@ export default function PrecificacaoPage() {
       if (d.commissionOverride) setCommissionOverride(d.commissionOverride); if (d.taxOverride) setTaxOverride(d.taxOverride);
       if (d.fixedOverride) setFixedOverride(d.fixedOverride); if (d.creditFreteOverride) setCreditFreteOverride(d.creditFreteOverride);
       if (d.creditComissaoOverride) setCreditComissaoOverride(d.creditComissaoOverride);
+
+      // Sincroniza estados aplicados com o rascunho carregado
+      setAppliedCustos({
+        operMode: (d.operMode as MoneyMode) || "fixed",
+        operValue: d.operValue || "0,00",
+        adsMode: (d.adsMode as MoneyMode) || "fixed",
+        adsValue: d.adsValue || "0,00",
+        cardFeeValue: d.cardFeeValue || "",
+        influencerMode: (d.influencerMode as MoneyMode) || "percent",
+        influencerValue: d.influencerValue || "",
+        descontoMode: (d.descontoMode as MoneyMode) || "percent",
+        descontoValue: d.descontoValue || "0",
+        rebateMode: (d.rebateMode as MoneyMode) || "percent",
+        rebateValue: d.rebateValue || "0"
+      });
+      setAppliedAjustes({
+        commissionOverride: d.commissionOverride || "", taxOverride: d.taxOverride || "", fixedOverride: d.fixedOverride || "",
+        creditFreteOverride: d.creditFreteOverride || "", creditComissaoOverride: d.creditComissaoOverride || "", incentiveCreditOverride: d.incentiveCreditOverride || ""
+      });
     } catch (e) { console.error("draft", e); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -336,25 +382,29 @@ export default function PrecificacaoPage() {
     if (!settings || !effectiveCmv || effectiveCmv <= 0) return null;
     const baseCh = settings.channels[effectiveChannel]; if (!baseCh) return null;
     const regimeFinal: Regime = regimeOverride === "default" ? settings.regime : regimeOverride;
-    const mainTaxPercent = taxOverride.trim() ? parseNumberPt(taxOverride) : (regimeOverride === "default" ? baseCh.mainTaxPercent : (regimeFinal === "normal" ? 18 : 14));
+    const mainTaxPercent = appliedAjustes.taxOverride.trim() ? parseNumberPt(appliedAjustes.taxOverride) : (regimeOverride === "default" ? baseCh.mainTaxPercent : (regimeFinal === "normal" ? 18 : 14));
     let commissionPercent = baseCh.commissionPercent;
     if (effectiveChannel === "meli" && baseCh.meli) commissionPercent = meliMode === "premium" ? baseCh.meli.premiumCommissionPercent : baseCh.meli.classicCommissionPercent;
-    if (commissionOverride.trim()) commissionPercent = parseNumberPt(commissionOverride);
-    const taxFixed = fixedOverride.trim() ? parseNumberPt(fixedOverride) : baseCh.taxFixed;
-    const creditFreteBase = creditFreteOverride.trim() ? parseNumberPt(creditFreteOverride) : baseCh.creditFretePercent;
+    if (appliedAjustes.commissionOverride.trim()) commissionPercent = parseNumberPt(appliedAjustes.commissionOverride);
+    const taxFixed = appliedAjustes.fixedOverride.trim() ? parseNumberPt(appliedAjustes.fixedOverride) : baseCh.taxFixed;
+    const creditFreteBase = appliedAjustes.creditFreteOverride.trim() ? parseNumberPt(appliedAjustes.creditFreteOverride) : baseCh.creditFretePercent;
     const creditFretePercent = effectiveChannel === "magalu" && magaluShipMode === "full" ? 0 : creditFreteBase;
-    const creditCommissionPercent = creditComissaoOverride.trim() ? parseNumberPt(creditComissaoOverride) : baseCh.creditCommissionPercent;
+    const creditCommissionPercent = appliedAjustes.creditComissaoOverride.trim() ? parseNumberPt(appliedAjustes.creditComissaoOverride) : baseCh.creditCommissionPercent;
     const ch = { commissionPercent, taxFixed, mainTaxPercent, hasCredits: baseCh.hasCredits, creditFretePercent, creditCommissionPercent, pisCofinsPercent: (baseCh as any).pisCofinsPercent, cardFeePercent: (baseCh as any).cardFeePercent, influencerPercent: (baseCh as any).influencerPercent, incentiveCreditPercent: (baseCh as any).incentiveCreditPercent };
     const common: SolvePORParams = { 
-      cmv: effectiveCmv, markupBase: effectiveMarkup, frete: parseNumberPt(frete), operMode, operValue: parseNumberPt(operValue), adsMode, adsValue: parseNumberPt(adsValue), 
-      margemAlvoPercent: parseNumberPt(margemEfetiva) || (baseCh.targetMarginPercent ?? 20), channel: ch, regime: regimeFinal, rebateMode, rebateValue: parseNumberPt(rebateValue), descontoMode, descontoValue: parseNumberPt(descontoValue),
-      cardFeePercent: cardFeeValue.trim() ? parseNumberPt(cardFeeValue) : undefined,
-      influencerMode, influencerValue: influencerValue.trim() ? parseNumberPt(influencerValue) : undefined,
-      incentiveCreditPercent: incentiveCreditOverride.trim() ? parseNumberPt(incentiveCreditOverride) : undefined
+      cmv: effectiveCmv, markupBase: effectiveMarkup, frete: parseNumberPt(frete), 
+      operMode: appliedCustos.operMode, operValue: parseNumberPt(appliedCustos.operValue), 
+      adsMode: appliedCustos.adsMode, adsValue: parseNumberPt(appliedCustos.adsValue), 
+      margemAlvoPercent: parseNumberPt(margemEfetiva) || (baseCh.targetMarginPercent ?? 20), channel: ch, regime: regimeFinal, 
+      rebateMode: appliedCustos.rebateMode, rebateValue: parseNumberPt(appliedCustos.rebateValue), 
+      descontoMode: appliedCustos.descontoMode, descontoValue: parseNumberPt(appliedCustos.descontoValue),
+      cardFeePercent: appliedCustos.cardFeeValue.trim() ? parseNumberPt(appliedCustos.cardFeeValue) : undefined,
+      influencerMode: appliedCustos.influencerMode, influencerValue: appliedCustos.influencerValue.trim() ? parseNumberPt(appliedCustos.influencerValue) : undefined,
+      incentiveCreditPercent: appliedAjustes.incentiveCreditOverride.trim() ? parseNumberPt(appliedAjustes.incentiveCreditOverride) : undefined
     };
-    if (effectiveChannel === "shopee" && !commissionOverride.trim() && !fixedOverride.trim() && baseCh.shopee?.mode === "tiered") return solveWithShopeeTiered({ ...common, channelRaw: baseCh });
+    if (effectiveChannel === "shopee" && !appliedAjustes.commissionOverride.trim() && !appliedAjustes.taxOverride.trim() && !appliedAjustes.fixedOverride.trim() && baseCh.shopee?.mode === "tiered") return solveWithShopeeTiered({ ...common, channelRaw: baseCh });
     return { ...solvePOR(common), channelUsed: ch, regimeUsed: regimeFinal };
-  }, [settings, effectiveCmv, effectiveMarkup, effectiveChannel, meliMode, magaluShipMode, frete, operMode, operValue, adsMode, adsValue, margemEfetiva, regimeOverride, descontoMode, descontoValue, rebateMode, rebateValue, commissionOverride, taxOverride, fixedOverride, creditFreteOverride, creditComissaoOverride]);
+  }, [settings, effectiveCmv, effectiveMarkup, effectiveChannel, meliMode, magaluShipMode, frete, margemEfetiva, regimeOverride, appliedCustos, appliedAjustes]);
 
   const alerts = useMemo(() => {
     if (!result) return [];
@@ -363,9 +413,9 @@ export default function PrecificacaoPage() {
     if (result.breakdown.margemPct < 0) list.push({ type: "bad", text: "Prejuízo: margem negativa." });
     if (result.breakdown.margemPct + 0.01 < alvo) list.push({ type: "warn", text: "Margem abaixo da meta." });
     if (result.POR_sugerido < effectiveCmv) list.push({ type: "bad", text: "POR abaixo do CMV." });
-    if (commissionOverride.trim() || taxOverride.trim() || fixedOverride.trim()) list.push({ type: "warn", text: "Ajustes especiais ativos" });
+    if (appliedAjustes.commissionOverride.trim() || appliedAjustes.taxOverride.trim() || appliedAjustes.fixedOverride.trim()) list.push({ type: "warn", text: "Ajustes especiais ativos" });
     return list;
-  }, [result, margemEfetiva, effectiveCmv, commissionOverride, taxOverride, fixedOverride]);
+  }, [result, margemEfetiva, effectiveCmv, appliedAjustes]);
 
   function saveToHistory(quiet = false) {
     if (!result) return false;
@@ -382,6 +432,12 @@ export default function PrecificacaoPage() {
     setQuery(""); setSelectedSku(null); setManualName(""); setManualCmv(""); setManualMarkup(""); setMargemDirty(false);
     setDescontoValue("0"); setRebateValue("0"); setCommissionOverride(""); setTaxOverride("");
     setFixedOverride(""); setCreditFreteOverride(""); setCreditComissaoOverride("");
+    setAppliedCustos({
+      operMode: "fixed", operValue: "0,00", adsMode: "fixed", adsValue: "0,00", cardFeeValue: "", influencerMode: "percent", influencerValue: "", descontoMode: "percent", descontoValue: "0", rebateMode: "percent", rebateValue: "0"
+    });
+    setAppliedAjustes({
+      commissionOverride: "", taxOverride: "", fixedOverride: "", creditFreteOverride: "", creditComissaoOverride: "", incentiveCreditOverride: ""
+    });
   }
 
   async function copyPorToClipboard() {
@@ -539,6 +595,10 @@ export default function PrecificacaoPage() {
                       <input value={rebateValue} onChange={(e) => setRebateValue(e.target.value)} inputMode="decimal" className="mt-2 w-full rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none" />
                     </div>
                   </div>
+
+                  <div className="mt-2">
+                    <button type="button" onClick={handleApplyCustos} className="w-full rounded-xl bg-blue-600/20 py-3 text-sm font-semibold text-blue-100 ring-1 ring-blue-500/30 hover:bg-blue-600/30 transition">Aplicar mudanças</button>
+                  </div>
                 </div>
               )}
             </Accordion>
@@ -554,6 +614,9 @@ export default function PrecificacaoPage() {
                   <SmallInput label="Crédito frete (%)" value={creditFreteOverride} onChange={setCreditFreteOverride} />
                   <SmallInput label="Crédito comissão (%)" value={creditComissaoOverride} onChange={setCreditComissaoOverride} />
                   <SmallInput label="Crédito incentivo (%)" value={incentiveCreditOverride} onChange={setIncentiveCreditOverride} />
+                </div>
+                <div className="md:col-span-2 flex justify-end">
+                  <button type="button" onClick={handleApplyAjustes} className="mt-2 rounded-xl bg-blue-600/20 px-6 py-3 text-sm font-semibold text-blue-100 ring-1 ring-blue-500/30 hover:bg-blue-600/30 transition">Aplicar ajustes</button>
                 </div>
               </div>
             </Accordion>
