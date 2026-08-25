@@ -121,28 +121,6 @@ export const ProductSchema = z.object({
 export type Product = z.infer<typeof ProductSchema>;
 
 /**
- * Schema para promoção
- */
-export const PromotionSchema = z.object({
-  sku: z.string().min(1).max(50),
-  name: z.string().min(1).max(200),
-  channel: z.string().min(1),
-  originalPrice: z.number().positive(),
-  promoPrice: z.number().positive(),
-  startDate: z.date(),
-  endDate: z.date(),
-  isActive: z.boolean().default(true),
-}).refine(data => data.promoPrice < data.originalPrice, {
-  message: 'Preço promocional deve ser menor que o preço original',
-  path: ['promoPrice'],
-}).refine(data => data.endDate > data.startDate, {
-  message: 'Data final deve ser posterior à data inicial',
-  path: ['endDate'],
-});
-
-export type Promotion = z.infer<typeof PromotionSchema>;
-
-/**
  * Schema para cadastro de usuário
  */
 export const RegisterSchema = z.object({

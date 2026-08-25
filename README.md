@@ -33,9 +33,7 @@
 
 - **Precisão Matemática**: Algoritmo complexo que considera todas as variáveis do e-commerce brasileiro
 - **Multi-Canal**: Configure regras diferentes para cada marketplace
-- **Histórico Completo**: Acompanhe todas as precificações realizadas
 - **Gestão de Produtos**: Cadastre e sincronize seu catálogo
-- **Promoções**: Gerencie campanhas promocionais com períodos definidos
 - **Responsivo**: Interface moderna e responsiva para desktop e mobile
 
 ---
@@ -61,18 +59,6 @@
 - Importação via planilha Excel
 - SKU único por produto
 - Sincronização com banco de dados
-
-### 🎯 Promoções
-- Cadastro de campanhas promocionais
-- Período de validade
-- Preços diferenciados por canal
-- Status ativo/inativo
-
-### 📈 Histórico e Relatórios
-- Histórico completo de precificações
-- Filtros por canal e período
-- Exportação de dados
-- Análise de margens
 
 ---
 
@@ -165,16 +151,12 @@ precificacao-app/
 │   ├── api/                      # API Routes
 │   │   ├── auth/                 # NextAuth endpoints
 │   │   ├── products/             # CRUD produtos
-│   │   ├── promotions/           # CRUD promoções
-│   │   ├── history/              # Histórico
 │   │   └── settings/             # Configurações
 │   ├── precificacao/             # Calculadora
 │   │   ├── components/           # Componentes modulares
 │   │   ├── hooks/                # Custom hooks
 │   │   └── page.tsx              # Página principal
 │   ├── produtos/                 # Gestão de produtos
-│   ├── promocoes/                # Gestão de promoções
-│   ├── historico/                # Histórico
 │   ├── configuracoes/            # Settings
 │   └── components/               # Componentes globais
 ├── lib/                          # Bibliotecas

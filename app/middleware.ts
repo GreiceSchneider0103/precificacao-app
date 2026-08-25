@@ -6,10 +6,8 @@ import { NextResponse } from "next/server";
 const PROTECTED_UI_PATHS = [
   "/configuracoes",
   "/precificacao",
-  "/historico",
   "/produtos",
   "/minha-conta",
-  "/promocoes",
 ];
 
 // 2. Cookies legados para limpeza (evita erro "494 Request Header Too Large")

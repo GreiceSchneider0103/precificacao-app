@@ -2,7 +2,6 @@
 import {
   PricingInputSchema,
   ProductSchema,
-  PromotionSchema,
   RegisterSchema,
   LoginSchema,
   ChangePasswordSchema,
@@ -109,53 +108,6 @@ describe('Validation Schemas', () => {
         name: '',
       });
       expect(result.success).toBe(false);
-    });
-  });
-
-  describe('PromotionSchema', () => {
-    const now = new Date();
-    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-
-    const validPromotion = {
-      sku: 'PROD-001',
-      name: 'Promoção Teste',
-      channel: 'shopee',
-      originalPrice: 200,
-      promoPrice: 150,
-      startDate: now,
-      endDate: tomorrow,
-      isActive: true,
-    };
-
-    it('should validate correct promotion', () => {
-      const result = PromotionSchema.safeParse(validPromotion);
-      expect(result.success).toBe(true);
-    });
-
-    it('should reject promo price higher than original', () => {
-      const result = PromotionSchema.safeParse({
-        ...validPromotion,
-        promoPrice: 250,
-      });
-      expect(result.success).toBe(false);
-    });
-
-    it('should reject end date before start date', () => {
-      const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      const result = PromotionSchema.safeParse({
-        ...validPromotion,
-        endDate: yesterday,
-      });
-      expect(result.success).toBe(false);
-    });
-
-    it('should default isActive to true', () => {
-      const { isActive, ...promoWithoutActive } = validPromotion;
-      const result = PromotionSchema.safeParse(promoWithoutActive);
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.isActive).toBe(true);
-      }
     });
   });
 

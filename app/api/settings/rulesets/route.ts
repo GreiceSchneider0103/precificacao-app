@@ -157,7 +157,6 @@ export async function PUT(req: Request) {
 
     // ✅ Tópico E: Invalida cache das páginas de cálculo
     revalidatePath("/precificacao");
-    revalidatePath("/promocoes");
 
     return NextResponse.json({ updated });
   } catch (error: any) {

@@ -21,7 +21,6 @@ export async function saveMarkupRule(id: string, data: any) {
 
   // ✅ Tópico E: Limpa o cache do servidor para estas rotas
   revalidatePath("/precificacao");
-  revalidatePath("/promocoes");
-  
+
   return { success: true };
 }

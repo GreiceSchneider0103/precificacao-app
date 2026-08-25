@@ -17,7 +17,6 @@ export function Header({
   const links = [
     { name: "Precificação", href: "/precificacao" },
     { name: "Produtos", href: "/produtos" },
-    { name: "Promoções", href: "/promocoes" },
     { name: "Configurações", href: "/configuracoes" },
   ];
 

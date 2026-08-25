@@ -10,8 +10,6 @@ type Product = { sku: string; name: string; cmv: number; updatedAt: string };
 
 type ShopeeTier = { min: number; max: number | null; commissionPercent: number; taxFixed: number };
 
-type Coupon = { id: string; name: string; code: string; discountMode: "percent" | "fixed"; discountValue: number; isActive: boolean };
-
 type ChannelConfig = {
   commissionPercent: number; taxFixed: number; mainTaxPercent: number;
   hasCredits: boolean; creditFretePercent: number; creditCommissionPercent: number; targetMarginPercent: number;
@@ -60,7 +58,6 @@ type BreakdownResult = {
 type CalcResult = BreakdownResult & { channelUsed: SolvePORParams["channel"]; regimeUsed: Regime };
 
 const STORAGE_PRODUCTS = "markup_products_v1";
-const STORAGE_HISTORY = "markup_price_history_v1";
 const DRAFT_KEY = "markup_precificacao_draft_v1";
 
 function normalizeSku(s: string) { return (s || "").trim().toUpperCase(); }
@@ -194,8 +191,6 @@ function InfoTip({ text }: { text: string }) {
 export default function PrecificacaoPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [coupons, setCoupons] = useState<Coupon[]>([]);
-  const [selectedCouponId, setSelectedCouponId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
   function showToast(type: "ok" | "err", text: string) { setToast({ type, text }); window.setTimeout(() => setToast(null), 1600); }
@@ -290,8 +285,6 @@ export default function PrecificacaoPage() {
       const data = await res.json() as { products?: Record<string, unknown>[] };
       setProducts((data.products || []).map((p) => ({ sku: String(p.sku ?? "").trim().toUpperCase(), name: String(p.name ?? "").trim(), cmv: Number(p.cmv ?? 0), updatedAt: String(p.updatedAt ?? new Date().toISOString()) })));
     })();
-    // Cupons
-    (async () => { try { const res = await fetch("/api/promotions"); if (res.ok) { const j = await res.json() as { promotions?: Coupon[] }; setCoupons((j?.promotions ?? []).filter((p) => p.isActive)); } } catch (e) { console.error("cupons", e); } })();
     // Settings
     (async () => {
       try {
@@ -328,7 +321,7 @@ export default function PrecificacaoPage() {
       if (d.influencerValue) setInfluencerValue(d.influencerValue);
       if (d.incentiveCreditOverride) setIncentiveCreditOverride(d.incentiveCreditOverride);
       if (d.descontoMode === "fixed" || d.descontoMode === "percent") setDescontoMode(d.descontoMode);
-      if (d.descontoValue) setDescontoValue(d.descontoValue); if (d.selectedCouponId) setSelectedCouponId(d.selectedCouponId);
+      if (d.descontoValue) setDescontoValue(d.descontoValue);
       if (d.rebateMode === "fixed" || d.rebateMode === "percent") setRebateMode(d.rebateMode);
       if (d.rebateValue) setRebateValue(d.rebateValue);
       if (d.commissionOverride) setCommissionOverride(d.commissionOverride); if (d.taxOverride) setTaxOverride(d.taxOverride);
@@ -354,17 +347,12 @@ export default function PrecificacaoPage() {
         creditFreteOverride: d.creditFreteOverride || "", creditComissaoOverride: d.creditComissaoOverride || "", incentiveCreditOverride: d.incentiveCreditOverride || ""
       });
     } catch (e) { console.error("draft", e); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    if (selectedCouponId) { const sel = coupons.find((c) => c.id === selectedCouponId); if (sel) { setDescontoMode(sel.discountMode); setDescontoValue(String(sel.discountValue).replace(".", ",")); } }
-  }, [selectedCouponId, coupons]);
 
   const saveDraftDebounced = useDebouncedDraftSaver(250);
   useEffect(() => {
-    saveDraftDebounced(DRAFT_KEY, { query, selectedSku, manualName, manualCmv, channel, meliMode, magaluShipMode, regimeOverride, frete, margem, operMode, operValue, adsMode, adsValue, cardFeeValue, influencerMode, influencerValue, incentiveCreditOverride, descontoMode, descontoValue, selectedCouponId, rebateMode, rebateValue, commissionOverride, taxOverride, fixedOverride, creditFreteOverride, creditComissaoOverride });
-  }, [query, selectedSku, manualName, manualCmv, channel, meliMode, magaluShipMode, regimeOverride, frete, margem, operMode, operValue, adsMode, adsValue, cardFeeValue, influencerMode, influencerValue, incentiveCreditOverride, descontoMode, descontoValue, selectedCouponId, rebateMode, rebateValue, commissionOverride, taxOverride, fixedOverride, creditFreteOverride, creditComissaoOverride, saveDraftDebounced]);
+    saveDraftDebounced(DRAFT_KEY, { query, selectedSku, manualName, manualCmv, channel, meliMode, magaluShipMode, regimeOverride, frete, margem, operMode, operValue, adsMode, adsValue, cardFeeValue, influencerMode, influencerValue, incentiveCreditOverride, descontoMode, descontoValue, rebateMode, rebateValue, commissionOverride, taxOverride, fixedOverride, creditFreteOverride, creditComissaoOverride });
+  }, [query, selectedSku, manualName, manualCmv, channel, meliMode, magaluShipMode, regimeOverride, frete, margem, operMode, operValue, adsMode, adsValue, cardFeeValue, influencerMode, influencerValue, incentiveCreditOverride, descontoMode, descontoValue, rebateMode, rebateValue, commissionOverride, taxOverride, fixedOverride, creditFreteOverride, creditComissaoOverride, saveDraftDebounced]);
 
   const filteredProducts = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -374,7 +362,6 @@ export default function PrecificacaoPage() {
 
   const picked = useMemo(() => { if (!selectedSku) return null; const s = normalizeSku(selectedSku); return products.find((p) => normalizeSku(p.sku) === s) || null; }, [products, selectedSku]);
 
-  const effectiveName = picked ? picked.name : manualName.trim() || "Produto sem cadastro";
   const effectiveCmv = picked ? picked.cmv : parseNumberPt(manualCmv);
 
   // ✅ FIX 3: recalcTick removido do useMemo (era desnecessário — useMemo não observa estado arbitrário)
@@ -416,17 +403,6 @@ export default function PrecificacaoPage() {
     if (appliedAjustes.commissionOverride.trim() || appliedAjustes.taxOverride.trim() || appliedAjustes.fixedOverride.trim()) list.push({ type: "warn", text: "Ajustes especiais ativos" });
     return list;
   }, [result, margemEfetiva, effectiveCmv, appliedAjustes]);
-
-  function saveToHistory(quiet = false) {
-    if (!result) return false;
-    try {
-      const arr = JSON.parse(localStorage.getItem(STORAGE_HISTORY) || "[]") as unknown[];
-      arr.unshift({ id: crypto.randomUUID(), createdAt: new Date().toISOString(), sku: picked?.sku || "", name: effectiveName, channel: effectiveChannel, meliMode, magaluShipMode, regime: result.regimeUsed, por: result.POR_sugerido, margemPct: result.breakdown.margemPct, cmv: effectiveCmv, channelUsed: result.channelUsed });
-      localStorage.setItem(STORAGE_HISTORY, JSON.stringify(arr));
-      if (!quiet) alert("Salvo no histórico.");
-      return true;
-    } catch { if (!quiet) showToast("err", "Falha ao salvar histórico."); return false; }
-  }
 
   function resetForNewPricing() {
     setQuery(""); setSelectedSku(null); setManualName(""); setManualCmv(""); setManualMarkup(""); setMargemDirty(false);
@@ -580,14 +556,8 @@ export default function PrecificacaoPage() {
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="rounded-xl border border-white/10 bg-white/5 p-4">
                       <p className="text-sm font-semibold mb-3">Desconto/Cupom</p>
-                      {coupons.length > 0 && (
-                        <select value={selectedCouponId || ""} onChange={(e) => setSelectedCouponId(e.target.value || null)} className="mb-3 w-full rounded-xl bg-neutral-950/60 px-3 py-2 text-sm text-white ring-1 ring-white/10 outline-none">
-                          <option value="">— Sem cupom —</option>
-                          {coupons.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.code})</option>)}
-                        </select>
-                      )}
                       <ModeToggle value={descontoMode} onChange={setDescontoMode} percentFirst />
-                      <input value={descontoValue} onChange={(e) => { setDescontoValue(e.target.value); setSelectedCouponId(null); }} inputMode="decimal" className="mt-2 w-full rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none" />
+                      <input value={descontoValue} onChange={(e) => setDescontoValue(e.target.value)} inputMode="decimal" className="mt-2 w-full rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none" />
                     </div>
                     <div className="rounded-xl border border-white/10 bg-white/5 p-4">
                       <p className="text-sm font-semibold mb-3">Rebate</p>
@@ -643,8 +613,7 @@ export default function PrecificacaoPage() {
                     </div>
                     <button type="button" onClick={copyPorToClipboard} className="h-11 shrink-0 rounded-xl bg-white/5 px-4 text-sm font-semibold ring-1 ring-white/10 hover:bg-white/10">Copiar POR</button>
                   </div>
-                  <button onClick={() => saveToHistory(false)} className="mt-4 w-full rounded-xl bg-emerald-500/15 px-4 py-3 text-sm font-semibold text-emerald-200 ring-1 ring-emerald-500/20 hover:bg-emerald-500/20">Salvar no histórico</button>
-                  <button type="button" onClick={() => { const ok = saveToHistory(true); if (ok) { resetForNewPricing(); showToast("ok", "Salvo!"); } }} className="mt-2 w-full rounded-xl bg-blue-500/12 px-4 py-3 text-sm font-semibold text-blue-100 ring-1 ring-blue-500/20 hover:bg-blue-500/16">Salvar e nova precificação</button>
+                  <button type="button" onClick={() => { resetForNewPricing(); showToast("ok", "Pronto para nova precificação."); }} className="mt-4 w-full rounded-xl bg-blue-500/12 px-4 py-3 text-sm font-semibold text-blue-100 ring-1 ring-blue-500/20 hover:bg-blue-500/16">Nova precificação</button>
                 </div>
                 <div className="mt-4 rounded-2xl border border-blue-500/20 bg-blue-500/10 p-5">
                   <p className="text-xs font-semibold text-blue-100">PARA ATINGIR {parseNumberPt(margemEfetiva).toFixed(2)}% DE MARGEM</p>
