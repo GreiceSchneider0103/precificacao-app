@@ -142,7 +142,7 @@ export const RegisterSchema = z.object({
   confirmPassword: z.string(),
   
   phone: z.string()
-    .regex(/^\+?[1-9]\d{1,14}$/, 'Telefone inválido')
+    .regex(/^\+?[1-9]\d{7,14}$/, 'Telefone inválido')
     .optional(),
 }).refine(data => data.password === data.confirmPassword, {
   message: 'Senhas não coincidem',
@@ -171,7 +171,7 @@ export const UpdateProfileSchema = z.object({
     .optional(),
   
   phone: z.string()
-    .regex(/^\+?[1-9]\d{1,14}$/, 'Telefone inválido')
+    .regex(/^\+?[1-9]\d{7,14}$/, 'Telefone inválido')
     .optional(),
 });
 

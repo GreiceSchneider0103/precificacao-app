@@ -94,15 +94,21 @@ export default function ConfiguracoesPage() {
   }
 
   useEffect(() => {
+    // Carga inicial única (fetch): não é sincronização de props/estado já disponível em
+    // React, é o caso legítimo de efeito. Ver contraste com o ajuste durante a renderização logo abaixo.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, []);
 
-  // quando trocar o ruleset selecionado
-  useEffect(() => {
-    if (!selected) return;
+  // Quando o usuário troca o ruleset selecionado (dropdown), o draft/nome exibidos precisam
+  // resetar para os dados do novo ruleset. Ajuste durante a renderização (em vez de useEffect)
+  // evita uma passagem de render extra — ver "Adjusting state when a prop changes" nos docs do React.
+  const [prevSelectedId, setPrevSelectedId] = useState(selectedId);
+  if (selected && selectedId !== prevSelectedId) {
+    setPrevSelectedId(selectedId);
     setDraft(deepClone(selected.data));
     setRenameText(selected.name);
-  }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   function setRegime(regime: Regime) {
     if (!draft) return;
@@ -721,9 +727,13 @@ function Field(props: { label: string; value: number; onChange: (v: string) => v
   const { label, value, onChange } = props;
   const [text, setText] = useState<string>(typeof value === "number" ? String(value).replace(".", ",") : "");
 
-  useEffect(() => {
+  // Ajusta o texto exibido quando o valor externo muda (ex: troca de canal/ruleset),
+  // sem usar useEffect — ver nota equivalente em ConfiguracoesPage acima.
+  const [prevValue, setPrevValue] = useState(value);
+  if (value !== prevValue) {
+    setPrevValue(value);
     setText(typeof value === "number" ? String(value).replace(".", ",") : "");
-  }, [value]);
+  }
 
   function handleChange(raw: string) {
     setText(raw);

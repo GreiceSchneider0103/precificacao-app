@@ -355,6 +355,29 @@ describe('solvePOR - Pricing Algorithm', () => {
 
       expect(result.breakdown.rebate).toBeGreaterThan(0);
     });
+
+    it('should require a lower POR to hit the same margin when a percentage rebate is applied', () => {
+      // Rebate percentual é um benefício (soma na margem de contribuição no breakdown),
+      // então precisa reduzir o POR necessário para atingir a mesma margem alvo — não aumentar.
+      const baseParams = {
+        cmv: 100,
+        markupBase: 2,
+        frete: 15,
+        margemAlvoPercent: 30,
+        channel: baseChannel,
+        regime: 'simples' as const,
+        operMode: 'fixed' as const,
+        operValue: 0,
+        adsMode: 'fixed' as const,
+        adsValue: 0,
+      };
+
+      const withoutRebate = solvePOR({ ...baseParams, rebateMode: 'fixed', rebateValue: 0 });
+      const withRebate = solvePOR({ ...baseParams, rebateMode: 'percent', rebateValue: 5 });
+
+      expect(withRebate.POR_sugerido).toBeLessThan(withoutRebate.POR_sugerido);
+      expect(withRebate.breakdown.margemPct).toBeCloseTo(30, 0);
+    });
   });
 
   describe('Edge Cases', () => {
@@ -377,7 +400,30 @@ describe('solvePOR - Pricing Algorithm', () => {
       expect(result.POR_sugerido).toBeGreaterThanOrEqual(0);
     });
 
-    it('should handle high margin (90%)', () => {
+    it('should handle high but feasible margin (70%)', () => {
+      const result = solvePOR({
+        cmv: 100,
+        markupBase: 2,
+        frete: 15,
+        margemAlvoPercent: 70,
+        channel: baseChannel,
+        regime: 'simples',
+        operMode: 'fixed',
+        operValue: 0,
+        adsMode: 'fixed',
+        adsValue: 0,
+        rebateMode: 'fixed',
+        rebateValue: 0,
+      });
+
+      expect(result.POR_sugerido).toBeGreaterThan(100);
+      // Com margem de 70%, o preço deve ser bem mais alto
+      expect(result.breakdown.margemPct).toBeCloseTo(70, 0);
+    });
+
+    it('should return 0 for a mathematically infeasible margin', () => {
+      // baseChannel consome 14% (comissão) + 6% (imposto) da receita: nenhum preço finito
+      // atinge 90% de margem de contribuição aqui, já que 14% + 6% + 90% > 100%.
       const result = solvePOR({
         cmv: 100,
         markupBase: 2,
@@ -393,9 +439,7 @@ describe('solvePOR - Pricing Algorithm', () => {
         rebateValue: 0,
       });
 
-      expect(result.POR_sugerido).toBeGreaterThan(100);
-      // Com margem de 90%, o preço deve ser bem mais alto
-      expect(result.breakdown.margemPct).toBeCloseTo(90, 0);
+      expect(result.POR_sugerido).toBe(0);
     });
 
     it('should calculate DE price based on markup', () => {

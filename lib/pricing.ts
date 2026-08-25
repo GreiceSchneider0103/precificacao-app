@@ -60,7 +60,7 @@ function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
-function pickShopeeTier(sh: { tiers: ShopeeTier[] } | undefined, price: number) {
+function pickShopeeTier(sh: { tiers?: ShopeeTier[] } | undefined, price: number) {
   const tiers = sh?.tiers || [];
   for (const t of tiers) {
     const minOk = price >= t.min;
@@ -175,9 +175,9 @@ export function solvePOR(params: {
       adsCoeff +
       credComissaoCoeff +
       incentiveCredCoeff -
-      cardFeeCoeff -
-      influencerCoeff - // Corrigido: influencerCoeff é um custo, deve ser subtraído
-      rebateCoeff -
+      cardFeeCoeff - // influencerCoeff/cardFeeCoeff são custos, por isso subtraídos
+      influencerCoeff +
+      rebateCoeff - // rebate é benefício (somado à mc no breakdown abaixo), por isso somado aqui
       m;
 
     const right = fixedCosts - credFrete - rebateFixed;
@@ -272,7 +272,9 @@ export function solvePOR(params: {
   };
 }
 
-export function solveWithShopeeTiered(params: Parameters<typeof solvePOR>[0] & { channelRaw: any }) {
+export function solveWithShopeeTiered(
+  params: Parameters<typeof solvePOR>[0] & { channelRaw: { shopee?: { mode: "flat" | "tiered"; tiers?: ShopeeTier[] } } }
+) {
   const sh = params.channelRaw?.shopee;
   if (!sh || sh.mode !== "tiered") {
     const r = solvePOR(params);

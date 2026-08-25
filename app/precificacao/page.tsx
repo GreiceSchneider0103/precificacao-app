@@ -1,14 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  solvePOR,
+  solveWithShopeeTiered as solveWithShopeeTieredBase,
+  parseNumberPt,
+  fmtPt,
+  type Regime,
+  type MoneyMode,
+  type ShopeeTier,
+} from "@/lib/pricing";
 
 type ChannelKey = string;
-type Regime = "simples" | "normal";
-type MoneyMode = "percent" | "fixed";
 
 type Product = { sku: string; name: string; cmv: number; updatedAt: string };
-
-type ShopeeTier = { min: number; max: number | null; commissionPercent: number; taxFixed: number };
 
 type ChannelConfig = {
   commissionPercent: number; taxFixed: number; mainTaxPercent: number;
@@ -38,23 +43,10 @@ type RawRuleSet = {
   shopeeTiers?: ShopeeTier[]; data?: RawRuleSet; isActive?: boolean;
 };
 
-type SolvePORParams = {
-  cmv: number; markupBase: number; frete: number;
-  operMode: MoneyMode; operValue: number; adsMode: MoneyMode; adsValue: number;
-  margemAlvoPercent: number;
-  channel: { commissionPercent: number; taxFixed: number; mainTaxPercent: number; hasCredits: boolean; creditFretePercent: number; creditCommissionPercent: number; pisCofinsPercent?: number; cardFeePercent?: number; influencerPercent?: number; incentiveCreditPercent?: number };
-  regime: Regime; rebateMode: MoneyMode; rebateValue: number; descontoMode: MoneyMode; descontoValue: number;
-  cardFeePercent?: number;
-  influencerMode?: MoneyMode;
-  influencerValue?: number;
-  incentiveCreditPercent?: number;
-};
-
-type BreakdownResult = {
-  POR_sugerido: number; precoDE: number; descontoNecessarioPct: number; descontoNecessarioR$: number;
-  breakdown: { comissao: number; imposto: number; pisCofins: number; taxaFixa: number; frete: number; cmv: number; operacionais: number; ads: number; taxaCartao: number; influencer: number; creditoFrete: number; creditoComissao: number; creditoIncentivo: number; rebate: number; margemContrib: number; margemPct: number; receitaLiquida: number };
-};
-
+// Tipos derivados diretamente da assinatura real de lib/pricing.ts, para nunca
+// divergirem do motor de cálculo oficial (single source of truth do algoritmo).
+type SolvePORParams = Parameters<typeof solvePOR>[0];
+type BreakdownResult = ReturnType<typeof solvePOR>;
 type CalcResult = BreakdownResult & { channelUsed: SolvePORParams["channel"]; regimeUsed: Regime };
 
 const STORAGE_PRODUCTS = "markup_products_v1";
@@ -65,86 +57,10 @@ function normalizeSku(s: string) { return (s || "").trim().toUpperCase(); }
 const CHANNEL_LABEL: Record<string, string> = { magalu: "Magalu", meli: "Mercado Livre", shopee: "Shopee", site: "Site", site_modifika: "Site Modifika", amazon: "Amazon", loja_fisica: "Loja Física" };
 function channelLabel(key: string) { return CHANNEL_LABEL[key] || key; }
 
-function parseNumberPt(raw: unknown) {
-  const cleaned = String(raw ?? "").trim().replace(/\./g, "").replace(",", ".");
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : 0;
-}
-function fmtPt(n: number) { return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-function clamp(n: number, min: number, max: number) { return Math.max(min, Math.min(max, n)); }
-
-function pickShopeeTier(sh: { tiers: ShopeeTier[] } | undefined, price: number): ShopeeTier {
-  const tiers = sh?.tiers || [];
-  for (const t of tiers) { if (price >= t.min && (t.max == null || price <= t.max)) return t; }
-  return tiers[tiers.length - 1] || { min: 0, max: null, commissionPercent: 14, taxFixed: 26 };
-}
-
-function solvePOR(params: SolvePORParams): BreakdownResult {
-  const { cmv, markupBase, frete, operMode, operValue, adsMode, adsValue, margemAlvoPercent, channel, regime, rebateMode, rebateValue, cardFeePercent, influencerMode = "percent", influencerValue, incentiveCreditPercent } = params;
-  const m = clamp(margemAlvoPercent / 100, 0, 0.95);
-  const pVal = (channel.pisCofinsPercent ?? (regime === "normal" ? 9.25 : 0)) / 100;
-  const porPago = (() => {
-    const c = channel.commissionPercent / 100, t = channel.mainTaxPercent / 100;
-    const pisCoeff = regime === "normal" ? pVal * (1 - t) : 0;
-    const operCoeff = operMode === "percent" ? operValue / 100 : 0, adsCoeff = adsMode === "percent" ? adsValue / 100 : 0;
-    const operFixed = operMode === "fixed" ? operValue : 0, adsFixed = adsMode === "fixed" ? adsValue : 0;
-    const cardFeeCoeff = (cardFeePercent ?? channel.cardFeePercent ?? 0) / 100;
-
-    const infVal = influencerValue ?? (influencerMode === "percent" ? channel.influencerPercent ?? 0 : 0);
-    const influencerCoeff = influencerMode === "percent" ? infVal / 100 : 0;
-    const influencerFixed = influencerMode === "fixed" ? infVal : 0;
-
-    const credFrete = regime === "normal" && channel.hasCredits ? frete * (channel.creditFretePercent / 100) : 0;
-    const credComissaoCoeff = regime === "normal" && channel.hasCredits ? c * (channel.creditCommissionPercent / 100) : 0;
-    const credIncentivoCoeff = regime === "normal" ? (incentiveCreditPercent ?? channel.incentiveCreditPercent ?? 0) / 100 : 0;
-    const rebateFixed = rebateMode === "fixed" ? rebateValue : 0, rebateCoeff = rebateMode === "percent" ? rebateValue / 100 : 0;
-    const leftCoeff = 1 - c - t - pisCoeff - operCoeff - adsCoeff - cardFeeCoeff - influencerCoeff + credComissaoCoeff + credIncentivoCoeff + rebateCoeff - m;
-    const right = channel.taxFixed + frete + cmv + operFixed + adsFixed + influencerFixed - credFrete - rebateFixed;
-    if (leftCoeff <= 0.000001) return 0;
-    return right / leftCoeff;
-  })();
-  const comissaoVal = porPago * (channel.commissionPercent / 100);
-  const impostoVal = porPago * (channel.mainTaxPercent / 100);
-  const pisVal = regime === "normal" ? pVal * (porPago - impostoVal) : 0;
-  const operR$ = operMode === "percent" ? porPago * (operValue / 100) : operValue;
-  const adsR$ = adsMode === "percent" ? porPago * (adsValue / 100) : adsValue;
-  const cardFeeR$ = porPago * ((cardFeePercent ?? channel.cardFeePercent ?? 0) / 100);
-
-  const infValFinal = influencerValue ?? (influencerMode === "percent" ? channel.influencerPercent ?? 0 : 0);
-  const influencerR$ = influencerMode === "percent" ? porPago * (infValFinal / 100) : infValFinal;
-
-  const credFrete = regime === "normal" && channel.hasCredits ? frete * (channel.creditFretePercent / 100) : 0;
-  const credComissao = regime === "normal" && channel.hasCredits ? comissaoVal * (channel.creditCommissionPercent / 100) : 0;
-  const credIncentivo = regime === "normal" ? porPago * ((incentiveCreditPercent ?? channel.incentiveCreditPercent ?? 0) / 100) : 0;
-  const rebateVal = rebateMode === "percent" ? porPago * (rebateValue / 100) : rebateValue;
-  const mc = porPago - comissaoVal - impostoVal - pisVal - channel.taxFixed - frete - cmv - operR$ - adsR$ - cardFeeR$ - influencerR$ + credFrete + credComissao + credIncentivo + rebateVal;
-  const precoDE = cmv * markupBase;
-  let porLista = porPago;
-  if (params.descontoMode === "percent") { const pct = params.descontoValue / 100; porLista = pct >= 1 ? porPago : porPago / (1 - pct); }
-  else porLista = porPago + params.descontoValue;
-  return {
-    POR_sugerido: porLista, precoDE, descontoNecessarioPct: precoDE > 0 ? (1 - porLista / precoDE) * 100 : 0, descontoNecessarioR$: precoDE - porLista,
-    breakdown: { comissao: comissaoVal, imposto: impostoVal, pisCofins: pisVal, taxaFixa: channel.taxFixed, frete, cmv, operacionais: operR$, ads: adsR$, taxaCartao: cardFeeR$, influencer: influencerR$, creditoFrete: credFrete, creditoComissao: credComissao, creditoIncentivo: credIncentivo, rebate: rebateVal, margemContrib: mc, margemPct: porPago > 0 ? (mc / porPago) * 100 : 0, receitaLiquida: porPago - comissaoVal - impostoVal - pisVal - channel.taxFixed },
-  };
-}
-
+// Wrapper fino: delega a convergência de faixa da Shopee para lib/pricing.ts
+// e só acrescenta o regime efetivamente usado, que a tela precisa exibir.
 function solveWithShopeeTiered(params: SolvePORParams & { channelRaw: ChannelConfig }): CalcResult {
-  const sh = params.channelRaw?.shopee;
-  if (!sh || sh.mode !== "tiered") return { ...solvePOR(params), channelUsed: params.channel, regimeUsed: params.regime };
-  let guess = 200, lastTierKey = "";
-  for (let i = 0; i < 12; i++) {
-    const tier = pickShopeeTier(sh, guess);
-    const tierKey = `${tier.min}-${tier.max}-${tier.commissionPercent}-${tier.taxFixed}`;
-    const chUsed = { ...params.channel, commissionPercent: tier.commissionPercent, taxFixed: tier.taxFixed };
-    const r = solvePOR({ ...params, channel: chUsed });
-    const newTier = pickShopeeTier(sh, r.POR_sugerido);
-    const newTierKey = `${newTier.min}-${newTier.max}-${newTier.commissionPercent}-${newTier.taxFixed}`;
-    if (newTierKey === tierKey || newTierKey === lastTierKey) return { ...r, channelUsed: chUsed, regimeUsed: params.regime };
-    lastTierKey = tierKey; guess = r.POR_sugerido;
-  }
-  const tier = pickShopeeTier(sh, guess);
-  const chUsed = { ...params.channel, commissionPercent: tier.commissionPercent, taxFixed: tier.taxFixed };
-  return { ...solvePOR({ ...params, channel: chUsed }), channelUsed: chUsed, regimeUsed: params.regime };
+  return { ...solveWithShopeeTieredBase(params), regimeUsed: params.regime };
 }
 
 function useDebouncedDraftSaver(delayMs: number) {
@@ -377,7 +293,7 @@ export default function PrecificacaoPage() {
     const creditFreteBase = appliedAjustes.creditFreteOverride.trim() ? parseNumberPt(appliedAjustes.creditFreteOverride) : baseCh.creditFretePercent;
     const creditFretePercent = effectiveChannel === "magalu" && magaluShipMode === "full" ? 0 : creditFreteBase;
     const creditCommissionPercent = appliedAjustes.creditComissaoOverride.trim() ? parseNumberPt(appliedAjustes.creditComissaoOverride) : baseCh.creditCommissionPercent;
-    const ch = { commissionPercent, taxFixed, mainTaxPercent, hasCredits: baseCh.hasCredits, creditFretePercent, creditCommissionPercent, pisCofinsPercent: (baseCh as any).pisCofinsPercent, cardFeePercent: (baseCh as any).cardFeePercent, influencerPercent: (baseCh as any).influencerPercent, incentiveCreditPercent: (baseCh as any).incentiveCreditPercent };
+    const ch = { commissionPercent, taxFixed, mainTaxPercent, hasCredits: baseCh.hasCredits, creditFretePercent, creditCommissionPercent, pisCofinsPercent: baseCh.pisCofinsPercent, cardFeePercent: baseCh.cardFeePercent, influencerPercent: baseCh.influencerPercent, incentiveCreditPercent: baseCh.incentiveCreditPercent };
     const common: SolvePORParams = { 
       cmv: effectiveCmv, markupBase: effectiveMarkup, frete: parseNumberPt(frete), 
       operMode: appliedCustos.operMode, operValue: parseNumberPt(appliedCustos.operValue), 
