@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { getRelativeTime } from "@/lib/utils";
 
 type Product = {
+  id?: string;
   sku: string;
   name: string;
   cmv: number;
@@ -520,26 +521,73 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
     setSelected((prev) => ({ ...prev, [sku]: !prev[sku] }));
   }
 
-  function deleteOne(sku: string) {
-    const nextProducts = products.filter((p) => p.sku !== sku);
-    setSelected((prev) => {
-      const n = { ...prev };
-      delete n[sku];
-      return n;
-    });
-    applyAndSave(nextProducts, `SKU ${sku} removido.`);
+  // Remoção precisa chamar o DELETE de verdade (não só tirar do array e re-salvar via
+  // PUT, que só faz upsert e nunca apaga linhas ausentes) — senão o produto continua
+  // "vivo" no banco e a sincronização semanal com o Tiny continua pegando ele.
+  async function deleteOne(sku: string) {
+    let product = products.find((p) => p.sku === sku);
+    if (!product?.id) {
+      const fresh = await loadFromDb(selectedEmpresaId);
+      setProducts(fresh);
+      product = fresh.find((p) => p.sku === sku);
+    }
+    if (!product?.id) return toast("Não encontrei esse produto para remover.");
+
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/products?id=${encodeURIComponent(product.id)}`, { method: "DELETE" });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data?.error || "Erro ao remover produto");
+      setProducts((prev) => prev.filter((p) => p.sku !== sku));
+      setSelected((prev) => {
+        const n = { ...prev };
+        delete n[sku];
+        return n;
+      });
+      toast(`SKU ${sku} removido.`);
+    } catch (e) {
+      console.error(e);
+      toast("Erro ao remover produto (veja o console).");
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function deleteSelected() {
+  async function deleteSelected() {
     const skus = Object.entries(selected)
       .filter(([, v]) => v)
       .map(([k]) => k);
 
     if (skus.length === 0) return toast("Nenhum item selecionado.");
 
-    const nextProducts = products.filter((p) => !selected[p.sku]);
-    setSelected({});
-    applyAndSave(nextProducts, `Removidos ${skus.length} itens.`);
+    let list = products;
+    if (list.some((p) => skus.includes(p.sku) && !p.id)) {
+      list = await loadFromDb(selectedEmpresaId);
+      setProducts(list);
+    }
+
+    const ids = skus
+      .map((sku) => list.find((p) => p.sku === sku)?.id)
+      .filter((id): id is string => !!id);
+    if (ids.length === 0) return toast("Não encontrei os produtos selecionados para remover.");
+
+    setSaving(true);
+    try {
+      const results = await Promise.all(ids.map((id) => fetch(`/api/products?id=${encodeURIComponent(id)}`, { method: "DELETE" })));
+      const failed = results.filter((r) => !r.ok).length;
+      setProducts((prev) => prev.filter((p) => !skus.includes(p.sku)));
+      setSelected({});
+      toast(
+        failed > 0
+          ? `Removidos ${ids.length - failed} de ${ids.length} itens (${failed} falharam).`
+          : `Removidos ${ids.length} itens.`
+      );
+    } catch (e) {
+      console.error(e);
+      toast("Erro ao remover produtos (veja o console).");
+    } finally {
+      setSaving(false);
+    }
   }
 
   function openEdit(p: Product) {
