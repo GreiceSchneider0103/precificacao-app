@@ -133,6 +133,45 @@ export default function ConfiguracoesPage() {
     setDraft(next);
   }
 
+  function setPisCofins(v: string) {
+    if (!draft) return;
+    const value = num(v, 9.25);
+    const next = deepClone(draft);
+    (Object.keys(next.channels) as ChannelKey[]).forEach((k) => {
+      next.channels[k].pisCofinsPercent = value;
+    });
+    setDraft(next);
+  }
+
+  function setHasCredits(has: boolean) {
+    if (!draft) return;
+    const next = deepClone(draft);
+    (Object.keys(next.channels) as ChannelKey[]).forEach((k) => {
+      next.channels[k].hasCredits = has;
+    });
+    setDraft(next);
+  }
+
+  function setCreditoFrete(v: string) {
+    if (!draft) return;
+    const value = num(v, 0);
+    const next = deepClone(draft);
+    (Object.keys(next.channels) as ChannelKey[]).forEach((k) => {
+      next.channels[k].creditFretePercent = value;
+    });
+    setDraft(next);
+  }
+
+  function setCreditoIncentivo(v: string) {
+    if (!draft) return;
+    const value = num(v, 0);
+    const next = deepClone(draft);
+    (Object.keys(next.channels) as ChannelKey[]).forEach((k) => {
+      next.channels[k].incentiveCreditPercent = value;
+    });
+    setDraft(next);
+  }
+
   function updateChannel(k: ChannelKey, patch: Partial<RuleSetData["channels"][ChannelKey]>) {
     if (!draft) return;
     const next = deepClone(draft);
@@ -265,6 +304,10 @@ export default function ConfiguracoesPage() {
 
   const mainTax = draft.regime === "normal" ? 18 : 14;
   const impostoPrincipal = draft.channels.magalu?.mainTaxPercent ?? mainTax;
+  const pisCofins = draft.channels.magalu?.pisCofinsPercent ?? 9.25;
+  const temCreditoIcms = draft.channels.magalu?.hasCredits ?? true;
+  const creditoFrete = draft.channels.magalu?.creditFretePercent ?? 0;
+  const creditoIncentivo = draft.channels.magalu?.incentiveCreditPercent ?? 0;
 
   return (
     <div className="space-y-6">
@@ -390,9 +433,47 @@ export default function ConfiguracoesPage() {
           )}
         </div>
 
-        {draft.regime === "normal" && (
+        {draft.regime === "normal" ? (
+          <>
+            <p className="text-xs" style={{ color: "var(--muted)" }}>
+              O ICMS varia conforme o estado (UF origem) da empresa — ajuste aqui o percentual correto. Ele vale para todos os canais.
+            </p>
+
+            <div className="flex items-end gap-4 flex-wrap pt-3 border-t" style={{ borderColor: "var(--border)" }}>
+              <div className="w-40">
+                <Field label="PIS e Cofins %" value={pisCofins} onChange={setPisCofins} />
+              </div>
+
+              <label className="flex items-center gap-2 text-sm pb-2.5">
+                <input
+                  type="checkbox"
+                  checked={temCreditoIcms}
+                  onChange={(e) => setHasCredits(e.target.checked)}
+                />
+                Empresa tem crédito de ICMS
+              </label>
+
+              {temCreditoIcms && (
+                <>
+                  <div className="w-48">
+                    <Field label="Crédito sobre frete (ICMS) %" value={creditoFrete} onChange={setCreditoFrete} />
+                  </div>
+                  <div className="w-52">
+                    <Field label="Crédito fabricante/incentivo %" value={creditoIncentivo} onChange={setCreditoIncentivo} />
+                  </div>
+                </>
+              )}
+            </div>
+
+            <p className="text-xs" style={{ color: "var(--muted)" }}>
+              {temCreditoIcms
+                ? "PIS/Cofins e os créditos valem para todos os canais desta empresa."
+                : "Sem crédito de ICMS: nenhum crédito (frete ou fabricante/incentivo) é aplicado no cálculo desta empresa."}
+            </p>
+          </>
+        ) : (
           <p className="text-xs" style={{ color: "var(--muted)" }}>
-            O ICMS varia conforme o estado (UF origem) da empresa — ajuste aqui o percentual correto. Ele vale para todos os canais.
+            No Simples Nacional o cálculo usa só os 14% do DAS — sem PIS/Cofins separado e sem crédito de ICMS.
           </p>
         )}
       </div>
@@ -673,7 +754,8 @@ export default function ConfiguracoesPage() {
       <div className="rounded-2xl border p-4 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted2)" }}>
         <div className="mb-1 font-semibold" style={{ color: "var(--text)" }}>Nota do motor de cálculo</div>
         <ul className="list-disc pl-5 space-y-1">
-          <li>O imposto principal é <b>único por empresa</b> — vale para todos os canais, edite no card &ldquo;Regime tributário&rdquo;.</li>
+          <li>O imposto principal, o PIS/Cofins e os créditos de ICMS são <b>únicos por empresa</b> — valem para todos os canais, edite no card &ldquo;Regime tributário&rdquo;.</li>
+          <li>PIS/Cofins e créditos de ICMS só se aplicam no <b>Regime Normal</b> — no Simples Nacional o cálculo usa apenas os 14% do DAS.</li>
           <li>O canal <b>Meli</b> usa a comissão do <b>plano</b> selecionado (Clássico/Premium).</li>
           <li>O canal <b>Shopee</b> usa a faixa que encaixa no preço (tiers).</li>
           <li>Canais desmarcados como <b>Ativo</b> não aparecem na Precificação para esta empresa.</li>
