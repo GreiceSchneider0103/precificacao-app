@@ -346,18 +346,6 @@ export default function PrecificacaoPage() {
     return list;
   }, [result, margemEfetiva, effectiveCmv, appliedAjustes]);
 
-  function resetForNewPricing() {
-    setQuery(""); setSelectedSku(null); setManualName(""); setManualCmv(""); setManualMarkup(""); setMargemDirty(false);
-    setDescontoValue("0"); setRebateValue("0"); setCommissionOverride(""); setTaxOverride("");
-    setFixedOverride(""); setCreditFreteOverride(""); setCreditComissaoOverride("");
-    setAppliedCustos({
-      operMode: "fixed", operValue: "0,00", adsMode: "fixed", adsValue: "0,00", cardFeeValue: "", influencerMode: "percent", influencerValue: "", descontoMode: "percent", descontoValue: "0", rebateMode: "percent", rebateValue: "0"
-    });
-    setAppliedAjustes({
-      commissionOverride: "", taxOverride: "", fixedOverride: "", creditFreteOverride: "", creditComissaoOverride: "", incentiveCreditOverride: ""
-    });
-  }
-
   async function copyPorToClipboard() {
     if (!result) return;
     try { await navigator.clipboard.writeText(fmtPt(result.POR_sugerido)); showToast("ok", "Preço POR copiado."); }
@@ -592,7 +580,22 @@ export default function PrecificacaoPage() {
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
                 <p className="text-[13px]" style={{ color: "var(--muted)" }}>Vender por</p>
-                <p className="text-[42px] font-semibold leading-none" style={{ fontFamily: "var(--font-serif), serif" }}>R$ {fmtPt(result.POR_sugerido)}</p>
+                <div className="flex items-center gap-2.5">
+                  <p className="text-[42px] font-semibold leading-none" style={{ fontFamily: "var(--font-serif), serif" }}>R$ {fmtPt(result.POR_sugerido)}</p>
+                  <button
+                    type="button"
+                    onClick={copyPorToClipboard}
+                    title="Copiar preço"
+                    aria-label="Copiar preço"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+                    style={{ background: "var(--accent-soft)", color: "var(--accent)" }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="7" y="7" width="9.5" height="9.5" rx="1.4" />
+                      <path d="M13 7V4.5A1.5 1.5 0 0 0 11.5 3h-8A1.5 1.5 0 0 0 2 4.5v8A1.5 1.5 0 0 0 3.5 14H6" />
+                    </svg>
+                  </button>
+                </div>
               </div>
               <div className="text-right">
                 <p className="text-[13px] line-through" style={{ color: "var(--muted)" }}>De R$ {fmtPt(result.precoDE)}</p>
@@ -639,20 +642,6 @@ export default function PrecificacaoPage() {
             <div className="mt-1 flex items-center justify-between text-[13px]" style={{ color: "var(--muted)" }}>
               <span>Receita líquida</span>
               <span className="tabular-nums font-medium" style={{ color: "var(--text)" }}>R$ {fmtPt(result.breakdown.receitaLiquida)}</span>
-            </div>
-
-            <div className="mt-6 flex gap-2.5">
-              <button type="button" onClick={copyPorToClipboard} className="flex-1 rounded-full py-3 text-sm font-semibold" style={{ background: "var(--accent)", color: "var(--accent-ink)" }}>
-                Copiar preço
-              </button>
-              <button
-                type="button"
-                onClick={() => { resetForNewPricing(); showToast("ok", "Pronto para nova precificação."); }}
-                className="flex-1 rounded-full border py-3 text-sm font-semibold"
-                style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}
-              >
-                Começar de novo
-              </button>
             </div>
           </div>
         </>
