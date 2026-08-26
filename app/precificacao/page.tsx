@@ -79,7 +79,8 @@ function mapRuleSetToSettings(rs: RawRuleSet): Settings {
   const base = rs || {};
   const regime: Regime = base.regime === "simples" ? "simples" : "normal";
   const mainTax = regime === "normal" ? 18 : 14;
-  const keys: ChannelKey[] = ["magalu", "meli", "shopee", "site", "outros", "site_modifika"];
+  // site_modifika removido dos canais de venda: vai virar uma empresa própria.
+  const keys: ChannelKey[] = ["magalu", "meli", "shopee", "site", "outros"];
   const channels: Record<ChannelKey, ChannelConfig> = {} as Record<ChannelKey, ChannelConfig>;
   for (const k of keys) {
     const inc: RawChannelData = (base.channels && base.channels[k]) || {};
@@ -205,7 +206,7 @@ export default function PrecificacaoPage() {
   const handleApplyCustos = () => setAppliedCustos({ operMode, operValue, adsMode, adsValue, cardFeeValue, influencerMode, influencerValue, descontoMode, descontoValue, rebateMode, rebateValue });
   const handleApplyAjustes = () => setAppliedAjustes({ commissionOverride, taxOverride, fixedOverride, creditFreteOverride, creditComissaoOverride, incentiveCreditOverride });
 
-  const effectiveMarkup = manualMarkup.trim() ? parseNumberPt(manualMarkup) : 4.3;
+  const effectiveMarkup = manualMarkup.trim() ? parseNumberPt(manualMarkup) : 3.7;
 
   // ✅ FIX 1: margem por canal via useMemo derivado — sem setState em useEffect
   const margemDefault = useMemo(() => {
@@ -391,7 +392,7 @@ export default function PrecificacaoPage() {
         >
           {empresas.length === 0 && <option value="">Nenhuma empresa cadastrada</option>}
           {empresas.map((e) => (
-            <option key={e.id} value={e.id}>{e.isActive ? "⭐ " : ""}{e.name}</option>
+            <option key={e.id} value={e.id}>{e.name}</option>
           ))}
         </select>
         {settings && (
@@ -450,8 +451,8 @@ export default function PrecificacaoPage() {
           {!picked && (
             <div className="mt-3 grid gap-3 rounded-xl border p-4 md:grid-cols-2" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
               <label className="grid gap-1">
-                <span className="text-xs" style={{ color: "var(--muted)" }}>Markup desejado (DE)<InfoTip text="Multiplicador do CMV para o preço DE. Padrão: 4,3" /></span>
-                <input value={manualMarkup} onChange={(e) => setManualMarkup(e.target.value)} inputMode="decimal" placeholder="ex: 4,3" className="rounded-lg border px-3.5 py-2.5 text-sm outline-none" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }} />
+                <span className="text-xs" style={{ color: "var(--muted)" }}>Markup desejado (DE)<InfoTip text="Multiplicador do CMV para o preço DE. Padrão: 3,7" /></span>
+                <input value={manualMarkup} onChange={(e) => setManualMarkup(e.target.value)} inputMode="decimal" placeholder="ex: 3,7" className="rounded-lg border px-3.5 py-2.5 text-sm outline-none" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }} />
               </label>
               <label className="grid gap-1">
                 <span className="text-xs" style={{ color: "var(--muted)" }}>CMV (R$) <span style={{ color: "var(--crit)" }}>*</span></span>
