@@ -4,10 +4,11 @@
 // sincronização de CMV por empresa.
 //
 // AVISO: o formato exato dos endpoints (`produtos.pesquisa.php`, `produto.obter.php`) e
-// dos campos de resposta (em especial `preco_custo`) segue a documentação pública e
-// historicamente estável da API v2, mas não pôde ser verificado contra uma conta real
-// neste ambiente (rede sem acesso a tiny.com.br). `extractCostFromTinyProduto` é o único
-// ponto a ajustar caso o campo real tenha outro nome.
+// dos campos de resposta segue a documentação pública e historicamente estável da API
+// v2, mas não pôde ser verificado contra uma conta real neste ambiente (rede sem acesso
+// a tiny.com.br). `extractCostFromTinyProduto` é o único ponto a ajustar caso os campos
+// reais tenham outro nome — hoje tenta `preco_custo_medio` (Custo médio, como aparece na
+// tela do Tiny) antes de `preco_custo`.
 import { prisma } from "@/lib/prisma";
 
 const TINY_BASE = "https://api.tiny.com.br/api2";
@@ -35,7 +36,10 @@ function toNumber(v: unknown): number | null {
 }
 
 type TinyProdutoResumo = { id?: string | number; codigo?: string; nome?: string };
-type TinyProdutoDetalhe = TinyProdutoResumo & { preco_custo?: string | number };
+type TinyProdutoDetalhe = TinyProdutoResumo & {
+  preco_custo?: string | number;
+  preco_custo_medio?: string | number;
+};
 
 type TinyPesquisaResponse = {
   retorno?: { status?: string; produtos?: { produto?: TinyProdutoResumo }[] };
@@ -64,8 +68,14 @@ export async function tinySearchProdutoBySku(token: string, sku: string): Promis
   return match?.id !== undefined ? { id: String(match.id) } : null;
 }
 
-/** Único ponto a ajustar se o campo de custo real do Tiny tiver outro nome. */
+/**
+ * Único ponto a ajustar se os campos de custo reais do Tiny tiverem outro nome.
+ * Prioriza "Custo médio" (preco_custo_medio) — é o que a tela do Tiny mostra por padrão
+ * e vem preenchido a partir do histórico de entradas — caindo para preco_custo se ausente.
+ */
 export function extractCostFromTinyProduto(produto: TinyProdutoDetalhe | undefined | null): number | null {
+  const medio = toNumber(produto?.preco_custo_medio);
+  if (medio !== null && medio > 0) return medio;
   return toNumber(produto?.preco_custo);
 }
 
@@ -82,12 +92,16 @@ export async function tinyObterProduto(token: string, id: string): Promise<{ cmv
   };
 }
 
-export async function fetchTinyCostBySku(token: string, sku: string): Promise<{ cmv: number; nome: string | null } | null> {
+export type TinyFetchCostResult =
+  | { ok: true; cmv: number; nome: string | null }
+  | { ok: false; reason: "not_found" | "no_cost" };
+
+export async function fetchTinyCostBySku(token: string, sku: string): Promise<TinyFetchCostResult> {
   const found = await tinySearchProdutoBySku(token, sku);
-  if (!found) return null;
+  if (!found) return { ok: false, reason: "not_found" };
   const detail = await tinyObterProduto(token, found.id);
-  if (!detail || detail.cmv === null || detail.cmv <= 0) return null;
-  return { cmv: detail.cmv, nome: detail.nome };
+  if (!detail || detail.cmv === null || detail.cmv <= 0) return { ok: false, reason: "no_cost" };
+  return { ok: true, cmv: detail.cmv, nome: detail.nome };
 }
 
 /**
@@ -122,12 +136,21 @@ export async function runTinySyncBatch(empresaId: string, opts: { budgetMs: numb
 
     try {
       const result = await fetchTinyCostBySku(token, product.sku);
-      if (result) {
+      if (result.ok) {
         await prisma.product.update({
           where: { id: product.id },
           data: { cmv: result.cmv, name: result.nome ?? product.name, updatedAt: new Date() },
         });
         updated++;
+      } else {
+        // Mesmo sem atualizar o custo, avança o updatedAt: senão este SKU some da
+        // "frente da fila" (ordenação por mais antigo) e trava a rodada seguinte
+        // tentando ele de novo antes de qualquer outro produto pendente.
+        await prisma.product.update({ where: { id: product.id }, data: { updatedAt: new Date() } });
+        errors.push({
+          sku: product.sku,
+          message: result.reason === "not_found" ? "SKU não encontrado no Tiny" : "Tiny não retornou um custo válido para este SKU",
+        });
       }
     } catch (err) {
       errors.push({ sku: product.sku, message: err instanceof Error ? err.message : String(err) });

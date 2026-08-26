@@ -248,7 +248,8 @@ async function saveToDb(nextProducts: Product[], empresaId: string) {
   if (!res.ok) throw new Error(data?.error || "Erro ao salvar produtos");
 }
 
-type TinySyncEmpresaResult = { empresaId: string; name: string; processed: number; total: number; done: boolean };
+type TinySyncError = { sku: string; message: string };
+type TinySyncEmpresaResult = { empresaId: string; name: string; processed: number; total: number; done: boolean; errors?: TinySyncError[] };
 
 export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
   const [products, setProducts] = useState<Product[]>([]);
@@ -645,6 +646,8 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
     if (!all && (!selectedEmpresaId || selectedEmpresaId === NONE_EMPRESA)) return;
     let processedSoFar = 0;
     let totalKnown = 0;
+    let updatedTotal = 0;
+    const allErrors: TinySyncError[] = [];
     setSyncState({ running: true, processed: 0, total: 0, mode: all ? "all" : "single" });
 
     try {
@@ -665,17 +668,27 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
           const empresasResult = (data.empresas ?? []) as TinySyncEmpresaResult[];
           if (round === 0) totalKnown = empresasResult.reduce((s, e) => s + e.total, 0);
           processedSoFar += empresasResult.reduce((s, e) => s + e.processed, 0);
+          updatedTotal += empresasResult.reduce((s, e) => s + ((e as { updated?: number }).updated ?? 0), 0);
+          for (const e of empresasResult) allErrors.push(...(e.errors ?? []));
           done = Boolean(data.done);
         } else {
           if (round === 0) totalKnown = data.total ?? 0;
           processedSoFar += data.processed ?? 0;
+          updatedTotal += data.updated ?? 0;
+          allErrors.push(...((data.errors ?? []) as TinySyncError[]));
           done = Boolean(data.done);
         }
 
         setSyncState({ running: !done, processed: Math.min(processedSoFar, totalKnown), total: totalKnown, mode: all ? "all" : "single" });
         if (done) break;
       }
-      toast("Sincronização com o Tiny concluída.");
+
+      if (allErrors.length > 0) {
+        console.warn(`Sincronização com o Tiny: ${allErrors.length} SKU(s) sem custo atualizado.`, allErrors);
+        toast(`Sincronização concluída: ${updatedTotal} atualizado(s), ${allErrors.length} sem retorno do Tiny (veja o console).`);
+      } else {
+        toast(`Sincronização com o Tiny concluída: ${updatedTotal} produto(s) atualizado(s).`);
+      }
       const fresh = await loadFromDb(selectedEmpresaId);
       setProducts(fresh);
     } catch (e) {

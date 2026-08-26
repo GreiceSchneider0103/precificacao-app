@@ -2,6 +2,7 @@ import {
   extractCostFromTinyProduto,
   tinySearchProdutoBySku,
   tinyObterProduto,
+  fetchTinyCostBySku,
   runTinySyncBatch,
 } from "@/lib/tiny";
 
@@ -55,6 +56,15 @@ describe("extractCostFromTinyProduto", () => {
   it("retorna null para valor não numérico", () => {
     expect(extractCostFromTinyProduto({ preco_custo: "abc" })).toBeNull();
   });
+
+  it("prioriza preco_custo_medio (Custo médio) sobre preco_custo quando ambos existem", () => {
+    expect(extractCostFromTinyProduto({ preco_custo: 10, preco_custo_medio: 822.99 })).toBe(822.99);
+  });
+
+  it("cai para preco_custo quando preco_custo_medio está ausente ou zerado", () => {
+    expect(extractCostFromTinyProduto({ preco_custo: 15.5, preco_custo_medio: 0 })).toBe(15.5);
+    expect(extractCostFromTinyProduto({ preco_custo: 15.5 })).toBe(15.5);
+  });
 });
 
 describe("tinySearchProdutoBySku", () => {
@@ -103,6 +113,28 @@ describe("tinyObterProduto", () => {
     mockFetchOnce({ retorno: { status: "OK" } });
     const result = await tinyObterProduto("token", "222");
     expect(result).toBeNull();
+  });
+});
+
+describe("fetchTinyCostBySku", () => {
+  it("retorna ok:true com o custo médio quando o SKU é encontrado", async () => {
+    mockFetchOnce({ retorno: { status: "OK", produtos: [{ produto: { id: 222, codigo: "ABC-123" } }] } });
+    mockFetchOnce({ retorno: { status: "OK", produto: { preco_custo_medio: 822.99, nome: "Produto X" } } });
+    const result = await fetchTinyCostBySku("token", "ABC-123");
+    expect(result).toEqual({ ok: true, cmv: 822.99, nome: "Produto X" });
+  });
+
+  it("retorna ok:false reason:not_found quando o SKU não existe no Tiny", async () => {
+    mockFetchOnce({ retorno: { status: "OK", produtos: [] } });
+    const result = await fetchTinyCostBySku("token", "ABC-123");
+    expect(result).toEqual({ ok: false, reason: "not_found" });
+  });
+
+  it("retorna ok:false reason:no_cost quando o SKU existe mas o Tiny não retorna custo", async () => {
+    mockFetchOnce({ retorno: { status: "OK", produtos: [{ produto: { id: 222, codigo: "ABC-123" } }] } });
+    mockFetchOnce({ retorno: { status: "OK", produto: { nome: "Produto X" } } });
+    const result = await fetchTinyCostBySku("token", "ABC-123");
+    expect(result).toEqual({ ok: false, reason: "no_cost" });
   });
 });
 
@@ -184,5 +216,23 @@ describe("runTinySyncBatch", () => {
     expect(result.updated).toBe(1);
     expect(result.errors).toEqual([{ sku: "SKU1", message: expect.any(String) }]);
     expect(result.done).toBe(true);
+  }, 10000);
+
+  it("quando o Tiny não retorna custo (soft fail), não atualiza o CMV mas avança o updatedAt do SKU", async () => {
+    prisma.markupRuleset.findUnique.mockResolvedValue({ id: "emp1", tinyApiToken: "tok" });
+    prisma.product.count.mockResolvedValue(1);
+    prisma.product.findMany.mockResolvedValue([{ id: "p1", sku: "SKU1", name: "Produto 1", updatedAt: new Date(0) }]);
+    prisma.product.update.mockResolvedValue({});
+    prisma.markupRuleset.update.mockResolvedValue({});
+
+    mockFetchOnce({ retorno: { status: "OK", produtos: [{ produto: { id: 1, codigo: "SKU1" } }] } });
+    mockFetchOnce({ retorno: { status: "OK", produto: { nome: "Produto 1" } } }); // sem custo
+
+    const result = await runTinySyncBatch("emp1", { budgetMs: 5000 });
+
+    expect(result.updated).toBe(0);
+    expect(result.errors).toEqual([{ sku: "SKU1", message: "Tiny não retornou um custo válido para este SKU" }]);
+    // Mesmo sem custo, o updatedAt avança (para não travar a fila nas próximas rodadas).
+    expect(prisma.product.update).toHaveBeenCalledWith({ where: { id: "p1" }, data: { updatedAt: expect.any(Date) } });
   }, 10000);
 });
