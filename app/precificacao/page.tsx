@@ -393,11 +393,6 @@ export default function PrecificacaoPage() {
 
   return (
     <div className="space-y-7">
-      <div>
-        <h1 className="text-[27px] font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>Qual o preço ideal?</h1>
-        <p className="mt-1.5 text-sm" style={{ color: "var(--muted)" }}>Escolha a empresa, o produto e o canal — o resto o Markup calcula para você.</p>
-      </div>
-
       {empresas.length === 0 && (
         <div className="rounded-2xl border p-5 text-sm" style={{ borderColor: "var(--warn-soft)", background: "var(--warn-soft)", color: "var(--warn)" }}>
           Ainda não encontrei nenhuma empresa cadastrada. Vá em <b>Configurações</b>, cadastre uma empresa e volte aqui.
