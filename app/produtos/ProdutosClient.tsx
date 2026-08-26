@@ -16,6 +16,7 @@ type EmpresaRow = { id: string; name: string; isActive: boolean; tinyApiToken?: 
 
 const NONE_EMPRESA = "__none__";
 const STALE_DAYS = 30;
+const PAGE_SIZE = 50;
 
 const STORAGE_LAST_IMPORT_BASE = "markup_products_last_import_v1";
 
@@ -255,6 +256,7 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
   const [selectedEmpresaId, setSelectedEmpresaId] = useState<string>("");
   const [empresasLoaded, setEmpresasLoaded] = useState(false);
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [status, setStatus] = useState<string>("");
   const [saving, setSaving] = useState(false);
@@ -351,12 +353,19 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
     });
   }, [products, query]);
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageItems = useMemo(
+    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filtered, safePage]
+  );
+
   const selectedCount = useMemo(() => Object.values(selected).filter(Boolean).length, [selected]);
 
   const allVisibleSelected = useMemo(() => {
-    if (filtered.length === 0) return false;
-    return filtered.every((p) => selected[p.sku]);
-  }, [filtered, selected]);
+    if (pageItems.length === 0) return false;
+    return pageItems.every((p) => selected[p.sku]);
+  }, [pageItems, selected]);
 
   function importItems(items: { sku: string; name?: string; cmv?: number; mlb?: string }[], rawSourceToSave?: string) {
     let added = 0;
@@ -502,7 +511,7 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
   function toggleSelectAllVisible() {
     const next = { ...selected };
     const target = !allVisibleSelected;
-    for (const p of filtered) next[p.sku] = target;
+    for (const p of pageItems) next[p.sku] = target;
     setSelected(next);
   }
 
@@ -714,7 +723,7 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
         <label className="text-sm font-medium">Empresa</label>
         <select
           value={selectedEmpresaId}
-          onChange={(e) => setSelectedEmpresaId(e.target.value)}
+          onChange={(e) => { setSelectedEmpresaId(e.target.value); setPage(1); }}
           className="border rounded-lg px-3 py-2 text-sm"
           style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
         >
@@ -824,7 +833,7 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
           </svg>
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => { setQuery(e.target.value); setPage(1); }}
             placeholder="Buscar por SKU, nome ou MLB..."
             className="w-full bg-transparent text-sm outline-none"
             style={{ color: "var(--text)" }}
@@ -925,56 +934,50 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
         </div>
       )}
 
-      {/* Grade de produtos */}
+      {/* Lista de produtos */}
       {filtered.length === 0 ? (
         <div className="rounded-2xl border py-16 text-center text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }}>
           {products.length === 0 ? "Nenhum produto cadastrado nesta empresa ainda." : "Nenhum produto encontrado para essa busca."}
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((p) => {
+        <div className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+          <div
+            className="grid items-center gap-3 border-b px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide"
+            style={{ gridTemplateColumns: "24px minmax(120px,1fr) minmax(160px,2fr) 110px 160px 120px", borderColor: "var(--border)", color: "var(--muted)" }}
+          >
+            <span />
+            <span>SKU</span>
+            <span>Nome do produto</span>
+            <span>CMV</span>
+            <span>Última atualização</span>
+            <span />
+          </div>
+
+          {pageItems.map((p) => {
             const daysStale = (Date.now() - new Date(p.updatedAt).getTime()) / (1000 * 60 * 60 * 24);
             const isStale = daysStale > STALE_DAYS;
             return (
               <div
                 key={p.sku}
-                className="rounded-2xl border p-5 shadow-sm"
-                style={{ background: "var(--surface)", borderColor: selected[p.sku] ? "var(--accent-soft-border)" : "var(--border)" }}
+                className="grid items-center gap-3 border-b px-4 py-3 text-sm last:border-b-0"
+                style={{ gridTemplateColumns: "24px minmax(120px,1fr) minmax(160px,2fr) 110px 160px 120px", borderColor: "var(--border)", background: selected[p.sku] ? "var(--accent-soft)" : "transparent" }}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="text-[15.5px] font-semibold leading-snug" style={{ fontFamily: "var(--font-serif), serif" }}>
-                    {p.name}
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={!!selected[p.sku]}
-                    onChange={() => toggleOne(p.sku)}
-                    className="mt-1 h-4 w-4 shrink-0 accent-current"
-                    style={{ color: "var(--accent)" }}
-                    aria-label={`Selecionar ${p.sku}`}
-                  />
-                </div>
-                <div className="mt-1.5 text-[11.5px] tracking-wide" style={{ color: "var(--muted)" }}>{p.sku}</div>
-
-                <div className="mt-4 flex items-baseline justify-between">
-                  <span className="text-[22px] font-semibold tabular-nums">R$ {toMoneyPt(p.cmv)}</span>
-                  {p.mlb ? (
-                    <span className="rounded-full px-2.5 py-1 text-[11px] font-medium" style={{ background: "var(--good-soft)", color: "var(--good)" }}>
-                      {p.mlb}
-                    </span>
-                  ) : (
-                    <span className="rounded-full px-2.5 py-1 text-[11px]" style={{ background: "var(--surface-soft)", color: "var(--muted)" }}>
-                      sem MLB
-                    </span>
-                  )}
-                </div>
-
-                <div className="mt-2 text-[11px]" style={{ color: isStale ? "var(--warn)" : "var(--muted)" }}>
-                  CMV atualizado {getRelativeTime(new Date(p.updatedAt))}
-                  {isStale ? " — verifique no Tiny" : ""}
-                </div>
-
-                <div className="mt-3.5 flex gap-4 border-t pt-3" style={{ borderColor: "var(--border)" }}>
+                <input
+                  type="checkbox"
+                  checked={!!selected[p.sku]}
+                  onChange={() => toggleOne(p.sku)}
+                  className="h-4 w-4 shrink-0 accent-current"
+                  style={{ color: "var(--accent)" }}
+                  aria-label={`Selecionar ${p.sku}`}
+                />
+                <span className="truncate font-medium tracking-wide">{p.sku}</span>
+                <span className="truncate">{p.name}</span>
+                <span className="tabular-nums font-semibold">R$ {toMoneyPt(p.cmv)}</span>
+                <span className="text-[12.5px]" style={{ color: isStale ? "var(--warn)" : "var(--muted)" }}>
+                  {getRelativeTime(new Date(p.updatedAt))}
+                  {isStale ? " ⚠" : ""}
+                </span>
+                <div className="flex gap-3.5">
                   <button type="button" onClick={() => openEdit(p)} className="text-[12.5px] font-semibold" style={{ color: "var(--accent)" }}>
                     Editar
                   </button>
@@ -985,6 +988,35 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Paginação */}
+      {filtered.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 text-sm" style={{ color: "var(--muted)" }}>
+          <span>
+            {filtered.length} produto{filtered.length === 1 ? "" : "s"} — página {safePage} de {totalPages}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={safePage <= 1}
+              className="rounded-full border px-4 py-1.5 font-medium disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}
+            >
+              Anterior
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={safePage >= totalPages}
+              className="rounded-full border px-4 py-1.5 font-medium disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}
+            >
+              Próxima
+            </button>
+          </div>
         </div>
       )}
 
