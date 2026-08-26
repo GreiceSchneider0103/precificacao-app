@@ -4,10 +4,16 @@
   "private": true,
   "author": "Greice Schneider",
   "description": "Sistema inteligente de precificação multi-canal para e-commerce",
-  "keywords": ["pricing", "e-commerce", "marketplace", "nextjs"],
+  "keywords": [
+    "pricing",
+    "e-commerce",
+    "marketplace",
+    "nextjs"
+  ],
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
+    "postinstall": "prisma generate",
     "start": "next start",
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
