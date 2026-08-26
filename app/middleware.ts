@@ -27,8 +27,11 @@ export default auth((req) => {
   // Bloqueia qualquer chamada para /api/* que não seja autenticação
   const isApiRoute = pathname.startsWith("/api");
   const isAuthApiRoute = pathname.startsWith("/api/auth");
+  // O cron do Vercel não manda cookie de sessão — a rota se autentica sozinha via
+  // Authorization: Bearer $CRON_SECRET (ver app/api/cron/tiny-sync/route.ts).
+  const isCronApiRoute = pathname.startsWith("/api/cron");
 
-  if (isApiRoute && !isAuthApiRoute && !isLoggedIn) {
+  if (isApiRoute && !isAuthApiRoute && !isCronApiRoute && !isLoggedIn) {
     return NextResponse.json(
       { error: "Não autorizado: Sessão inválida ou expirada" },
       { status: 401 }

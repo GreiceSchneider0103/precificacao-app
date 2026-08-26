@@ -10,6 +10,11 @@ datasource db {
 
 // --- AUTENTICAÇÃO (NextAuth) ---
 
+enum UserRole {
+  MASTER
+  MEMBER
+}
+
 model User {
   id            String    @id @default(cuid())
   name          String?
@@ -18,6 +23,7 @@ model User {
   image         String?
   phone         String?
   passwordHash  String?
+  role          UserRole  @default(MASTER)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -80,15 +86,18 @@ model UserSettings {
 }
 
 model MarkupRuleset {
-  id        String   @id @default(cuid())
-  userId    String
-  name      String
-  isActive  Boolean  @default(false)
-  data      Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String    @id @default(cuid())
+  userId         String
+  name           String
+  isActive       Boolean   @default(false)
+  data           Json
+  tinyApiToken   String?   // Token da API v2 do Tiny ERP desta empresa
+  tinyLastSyncAt DateTime? // Última sincronização de CMV bem-sucedida
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  products Product[]
 
   @@index([userId])
   @@map("markup_settings_rulesets_v1") // Mantém o nome da tabela física
@@ -99,6 +108,7 @@ model MarkupRuleset {
 model Product {
   id        String    @id @default(cuid())
   userId    String
+  empresaId String?   // Empresa (MarkupRuleset) dona deste SKU no Tiny; null = legado/não atribuído
   sku       String
   name      String
   cmv       Decimal   @db.Decimal(10, 2) // Troca Float por Decimal
@@ -107,10 +117,12 @@ model Product {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime? // Suporte a Soft Delete
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  empresa MarkupRuleset? @relation(fields: [empresaId], references: [id], onDelete: SetNull)
 
-  @@unique([userId, sku]) // Isolamento multi-tenant por SKU
+  @@unique([userId, empresaId, sku]) // SKU único por empresa (não mais por conta inteira)
   @@index([userId, deletedAt]) // Index para performance em listagens "vivas"
+  @@index([userId, empresaId])
 }
 
 // --- NEGÓCIO E PRECIFICAÇÃO ---

@@ -50,6 +50,8 @@ type EmpresaRow = {
   isActive: boolean;
   data: RuleSetData;
   updatedAt: string;
+  tinyApiToken?: string | null;
+  tinyLastSyncAt?: string | null;
 };
 
 function num(v: any, fallback = 0) {
@@ -68,6 +70,7 @@ export default function ConfiguracoesPage() {
 
   const [newName, setNewName] = useState("Nova empresa");
   const [renameText, setRenameText] = useState("");
+  const [tinyTokenDraft, setTinyTokenDraft] = useState("");
   const [status, setStatus] = useState<string>("");
   const [editMode, setEditMode] = useState(false);
 
@@ -92,6 +95,7 @@ export default function ConfiguracoesPage() {
     setSelectedId(targetId);
     setDraft(targetId ? deepClone(list.find((x) => x.id === targetId)!.data) : null);
     setRenameText(list.find((x) => x.id === targetId)?.name ?? "");
+    setTinyTokenDraft(list.find((x) => x.id === targetId)?.tinyApiToken ?? "");
     setStatus("");
   }
 
@@ -110,6 +114,7 @@ export default function ConfiguracoesPage() {
     setPrevSelectedId(selectedId);
     setDraft(deepClone(selected.data));
     setRenameText(selected.name);
+    setTinyTokenDraft(selected.tinyApiToken ?? "");
     setEditMode(false);
   }
 
@@ -229,7 +234,7 @@ export default function ConfiguracoesPage() {
     const res = await fetch("/api/settings/rulesets", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: selectedId, action: "save", data: draft }),
+      body: JSON.stringify({ id: selectedId, action: "save", data: draft, tinyApiToken: tinyTokenDraft.trim() || null }),
     });
     const json = await res.json();
     if (!res.ok) {
@@ -245,6 +250,7 @@ export default function ConfiguracoesPage() {
     if (!selected) return;
     setDraft(deepClone(selected.data));
     setRenameText(selected.name);
+    setTinyTokenDraft(selected.tinyApiToken ?? "");
     setEditMode(false);
     setStatus("");
   }
@@ -532,6 +538,35 @@ export default function ConfiguracoesPage() {
             No Simples Nacional o cálculo usa só os 14% do DAS — sem PIS/Cofins separado e sem crédito de ICMS.
           </p>
         )}
+      </div>
+
+      {/* Integração com o Tiny ERP */}
+      <div className="rounded-2xl border p-4 space-y-3" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+        <h2 className="text-lg font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>Integração com o Tiny ERP</h2>
+        <div className="flex items-end gap-4 flex-wrap">
+          <div className="w-72">
+            <div className="text-sm font-medium" style={{ color: "var(--muted2)" }}>Token API Tiny</div>
+            <input
+              type="password"
+              value={tinyTokenDraft}
+              onChange={(e) => setTinyTokenDraft(e.target.value)}
+              disabled={!editMode}
+              placeholder="Cole aqui o token da API v2 desta empresa"
+              className="mt-1 border rounded-lg px-3 py-2 text-sm w-full disabled:cursor-not-allowed disabled:opacity-70"
+              style={{ background: editMode ? "var(--input-bg)" : "var(--surface-soft)", color: "var(--input-text)", borderColor: "var(--border)" }}
+            />
+          </div>
+          <div className="text-sm" style={{ color: "var(--muted)" }}>
+            Última sincronização:{" "}
+            <span style={{ color: "var(--text)" }}>
+              {selected?.tinyLastSyncAt ? new Date(selected.tinyLastSyncAt).toLocaleString("pt-BR") : "nunca"}
+            </span>
+          </div>
+        </div>
+        <p className="text-xs" style={{ color: "var(--muted)" }}>
+          Com o token configurado, use o botão &ldquo;Atualizar CMV&rdquo; na aba Produtos para puxar o custo mais
+          recente do Tiny — manualmente ou pela sincronização semanal automática.
+        </p>
       </div>
 
       {/* Canais */}

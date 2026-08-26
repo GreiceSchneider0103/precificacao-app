@@ -29,7 +29,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!user || !user.passwordHash) return null;
         const ok = await compare(password, user.passwordHash);
         if (!ok) return null;
-        return { id: user.id, email: user.email, name: user.name ?? "" };
+        return { id: user.id, email: user.email, name: user.name ?? "", role: user.role };
       },
     }),
   ],
@@ -56,13 +56,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
 
     async jwt({ token, user, trigger, session }) {
-      if (user) { token.id = user.id; token.email = user.email; }
+      if (user) { token.id = user.id; token.email = user.email; token.role = (user as { role?: string }).role; }
       if (trigger === "update" && session) return { ...token, ...(session as Record<string, unknown>) };
       return token;
     },
 
     async session({ session, token }) {
-      if (session.user && token.id) { session.user.id = token.id as string; }
+      if (session.user && token.id) {
+        session.user.id = token.id as string;
+        session.user.role = (token.role as "MASTER" | "MEMBER" | undefined) ?? "MASTER";
+      }
       return session;
     },
   },
@@ -73,6 +76,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
 declare module "next-auth" {
   interface Session {
-    user: { id: string; name?: string | null; email?: string | null; image?: string | null };
+    user: { id: string; name?: string | null; email?: string | null; image?: string | null; role?: "MASTER" | "MEMBER" };
   }
 }

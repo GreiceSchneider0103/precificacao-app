@@ -2,14 +2,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { upsertProductBySku } from "@/lib/db/products";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 /**
- * GET: Lista produtos do usuário logado
+ * GET: Lista produtos do usuário logado. Aceita ?empresaId= para filtrar por empresa
+ * (use "none" para listar só os produtos legados sem empresa atribuída). Sem o
+ * parâmetro, retorna todos os produtos da conta (compatibilidade retroativa).
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await auth();
     const userId = session?.user?.id;
@@ -18,8 +21,16 @@ export async function GET() {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
+    const empresaId = new URL(request.url).searchParams.get("empresaId");
+    const where =
+      empresaId === "none"
+        ? { userId, empresaId: null }
+        : empresaId
+        ? { userId, empresaId }
+        : { userId };
+
     const products = await prisma.product.findMany({
-      where: { userId },
+      where,
       orderBy: { updatedAt: "desc" },
       select: {
         id: true,
@@ -27,6 +38,7 @@ export async function GET() {
         name: true,
         cmv: true,
         mlb: true,
+        empresaId: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -58,7 +70,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { sku, name, cmv, mlb } = body;
+    const { sku, name, cmv, mlb, empresaId } = body;
 
     // Validação
     if (!sku || typeof sku !== "string" || !sku.trim()) {
@@ -80,28 +92,16 @@ export async function POST(request: NextRequest) {
     }
 
     const skuNorm = sku.trim().toUpperCase();
+    const empresaIdNorm: string | null = empresaId ? String(empresaId) : null;
 
-    // ✅ upsert: cria ou atualiza pelo par userId + sku
-    const product = await prisma.product.upsert({
-      where: {
-        userId_sku: {
-          userId,
-          sku: skuNorm,
-        },
-      },
-      update: {
-        name: name.trim(),
-        cmv: cmvNum,
-        mlb: mlb ? String(mlb).trim() : null,
-        updatedAt: new Date(),
-      },
-      create: {
-        userId,
-        sku: skuNorm,
-        name: name.trim(),
-        cmv: cmvNum,
-        mlb: mlb ? String(mlb).trim() : null,
-      },
+    // ✅ upsert: cria ou atualiza pelo trio userId + empresaId + sku
+    const product = await upsertProductBySku({
+      userId,
+      empresaId: empresaIdNorm,
+      sku: skuNorm,
+      name: name.trim(),
+      cmv: cmvNum,
+      mlb: mlb ? String(mlb).trim() : null,
     });
 
     return NextResponse.json(
@@ -182,23 +182,14 @@ export async function PUT(request: NextRequest) {
     // Upsert de cada produto da lista
     await Promise.all(
       products.map((p) => {
-        const prod = p as { sku: string; name: string; cmv: number; mlb?: string | null };
-        const skuNorm = prod.sku.trim().toUpperCase();
-        return prisma.product.upsert({
-          where: { userId_sku: { userId, sku: skuNorm } },
-          update: {
-            name: prod.name.trim(),
-            cmv: Number(prod.cmv),
-            mlb: prod.mlb ? String(prod.mlb).trim() : null,
-            updatedAt: new Date(),
-          },
-          create: {
-            userId,
-            sku: skuNorm,
-            name: prod.name.trim(),
-            cmv: Number(prod.cmv),
-            mlb: prod.mlb ? String(prod.mlb).trim() : null,
-          },
+        const prod = p as { sku: string; name: string; cmv: number; mlb?: string | null; empresaId?: string | null };
+        return upsertProductBySku({
+          userId,
+          empresaId: prod.empresaId ? String(prod.empresaId) : null,
+          sku: prod.sku.trim().toUpperCase(),
+          name: prod.name.trim(),
+          cmv: Number(prod.cmv),
+          mlb: prod.mlb ? String(prod.mlb).trim() : null,
         });
       })
     );

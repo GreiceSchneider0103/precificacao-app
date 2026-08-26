@@ -18,11 +18,18 @@ export async function POST(req: NextRequest) {
     const userId = session.user.id;
 
     // 2. Pegar os produtos do body (Enviados pelo front após parsear o Excel)
-    const { products } = await req.json();
+    const { products, empresaId } = await req.json();
 
     if (!Array.isArray(products)) {
       return NextResponse.json({ error: "Formato inválido" }, { status: 400 });
     }
+    // Import sempre acontece no contexto de uma empresa selecionada na tela — exigimos
+    // aqui para manter o upsert pela chave composta simples (Prisma não aceita null
+    // num campo de chave única composta dentro de um upsert em lote/transação).
+    if (!empresaId || typeof empresaId !== "string") {
+      return NextResponse.json({ error: "Selecione uma empresa antes de importar" }, { status: 400 });
+    }
+    const empresaIdNorm = empresaId;
 
     const results = { created: 0, updated: 0, errors: [] as string[] };
     const BATCH_SIZE = 50; // Lotes menores para maior estabilidade
@@ -39,11 +46,12 @@ export async function POST(req: NextRequest) {
             // Incrementando contadores (Lógica simplificada para o exemplo)
             results.created++; 
 
-            // Upsert usando a chave composta [userId, sku] definida no seu Schema
+            // Upsert usando a chave composta [userId, empresaId, sku] definida no schema
             return prisma.product.upsert({
               where: {
-                userId_sku: {
+                userId_empresaId_sku: {
                   userId: userId,
+                  empresaId: empresaIdNorm,
                   sku: data.sku,
                 },
               },
@@ -59,6 +67,7 @@ export async function POST(req: NextRequest) {
                 cmv: data.cmv,
                 mlb: data.mlb,
                 userId: userId,
+                empresaId: empresaIdNorm,
               },
             });
           } catch (err: any) {

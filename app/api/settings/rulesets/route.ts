@@ -152,6 +152,7 @@ export async function PUT(req: Request) {
       data: {
         name: body.name ?? existing.name,
         data: body.data ? (normalizeData(body.data) as any) : existing.data,
+        tinyApiToken: body.tinyApiToken !== undefined ? body.tinyApiToken : existing.tinyApiToken,
       },
     });
 
