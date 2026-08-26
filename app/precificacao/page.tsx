@@ -16,6 +16,7 @@ type ChannelKey = string;
 type Product = { sku: string; name: string; cmv: number; updatedAt: string };
 
 type ChannelConfig = {
+  enabled: boolean;
   commissionPercent: number; taxFixed: number; mainTaxPercent: number;
   hasCredits: boolean; creditFretePercent: number; creditCommissionPercent: number; targetMarginPercent: number;
   pisCofinsPercent?: number;
@@ -29,6 +30,7 @@ type ChannelConfig = {
 type Settings = { regime: Regime; ufOrigem: string; channels: Record<ChannelKey, ChannelConfig> };
 
 type RawChannelData = {
+  enabled?: boolean;
   commissionPercent?: number | string; taxFixed?: number | string; mainTaxPercent?: number | string;
   hasCredits?: boolean; creditFretePercent?: number | string; creditCommissionPercent?: number | string; targetMarginPercent?: number | string;
   pisCofinsPercent?: number | string;
@@ -42,6 +44,8 @@ type RawRuleSet = {
   meli?: { classicCommissionPercent?: number; premiumCommissionPercent?: number };
   shopeeTiers?: ShopeeTier[]; data?: RawRuleSet; isActive?: boolean;
 };
+
+type EmpresaRow = { id: string; name: string; isActive: boolean; data: RawRuleSet };
 
 // Tipos derivados diretamente da assinatura real de lib/pricing.ts, para nunca
 // divergirem do motor de cálculo oficial (single source of truth do algoritmo).
@@ -81,8 +85,9 @@ function mapRuleSetToSettings(rs: RawRuleSet): Settings {
     const inc: RawChannelData = (base.channels && base.channels[k]) || {};
     const mp = k !== "site" && k !== "site_modifika";
     const isModifika = k === "site_modifika";
-    channels[k] = { 
-      commissionPercent: Number(inc.commissionPercent ?? (isModifika ? 1 : 0)), 
+    channels[k] = {
+      enabled: inc.enabled !== false,
+      commissionPercent: Number(inc.commissionPercent ?? (isModifika ? 1 : 0)),
       taxFixed: Number(inc.taxFixed ?? 0), 
       mainTaxPercent: Number(inc.mainTaxPercent ?? (isModifika ? 18 : mainTax)), 
       hasCredits: typeof inc.hasCredits === "boolean" ? inc.hasCredits : (k === "site_modifika" || mp), 
@@ -132,10 +137,17 @@ function Step({ n, label, children }: { n: number; label: string; children: Reac
 
 export default function PrecificacaoPage() {
   const [products, setProducts] = useState<Product[]>([]);
-  const [settings, setSettings] = useState<Settings | null>(null);
+  const [empresas, setEmpresas] = useState<EmpresaRow[]>([]);
+  const [selectedEmpresaId, setSelectedEmpresaId] = useState<string>("");
   const [toast, setToast] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
   function showToast(type: "ok" | "err", text: string) { setToast({ type, text }); window.setTimeout(() => setToast(null), 1600); }
+
+  const settings = useMemo((): Settings | null => {
+    const emp = empresas.find((e) => e.id === selectedEmpresaId) ?? empresas[0];
+    if (!emp) return null;
+    return mapRuleSetToSettings(emp.data ?? emp);
+  }, [empresas, selectedEmpresaId]);
 
   const [margemDirty, setMargemDirty] = useState(false);
   const [meliMode, setMeliMode] = useState<"classic" | "premium">("classic");
@@ -146,7 +158,6 @@ export default function PrecificacaoPage() {
   const [manualMarkup, setManualMarkup] = useState("");
   const [manualCmv, setManualCmv] = useState("");
   const [channel, setChannel] = useState<ChannelKey>("magalu");
-  const [regimeOverride, setRegimeOverride] = useState<"default" | Regime>("default");
   const [frete, setFrete] = useState("40,00");
   const [operMode, setOperMode] = useState<MoneyMode>("fixed");
   const [operValue, setOperValue] = useState("0,00");
@@ -206,7 +217,11 @@ export default function PrecificacaoPage() {
   const margemEfetiva = margemDirty ? margem : margemDefault;
 
   // ✅ FIX 2: canal efetivo via useMemo — sem setState em useEffect
-  const availableChannels = useMemo(() => settings ? Object.keys(settings.channels) : ["magalu", "meli", "shopee"], [settings]);
+  const availableChannels = useMemo(() => {
+    if (!settings) return ["magalu", "meli", "shopee"];
+    const enabled = Object.keys(settings.channels).filter((k) => settings.channels[k].enabled);
+    return enabled.length > 0 ? enabled : Object.keys(settings.channels);
+  }, [settings]);
 
   const effectiveChannel: ChannelKey = useMemo(() => {
     if (settings && !settings.channels[channel] && availableChannels.length > 0) return availableChannels[0];
@@ -227,32 +242,29 @@ export default function PrecificacaoPage() {
       const data = await res.json() as { products?: Record<string, unknown>[] };
       setProducts((data.products || []).map((p) => ({ sku: String(p.sku ?? "").trim().toUpperCase(), name: String(p.name ?? "").trim(), cmv: Number(p.cmv ?? 0), updatedAt: String(p.updatedAt ?? new Date().toISOString()) })));
     })();
-    // Settings
+    // Empresas (rulesets)
     (async () => {
       try {
         const res = await fetch("/api/settings/rulesets");
         if (res.ok) {
-          const j = await res.json() as { rulesets?: RawRuleSet[] };
+          const j = await res.json() as { rulesets?: EmpresaRow[] };
           const list = j?.rulesets ?? [];
-          const active = list.find((r) => r.isActive) || list[0] || null;
-          if (active) setSettings(mapRuleSetToSettings(active.data ? active.data : active));
-        } else {
-          const raw = localStorage.getItem("markup_settings_rulesets_v1");
-          if (raw) { const store = JSON.parse(raw) as { ruleSets?: RawRuleSet[] }; const a = store?.ruleSets?.[0]; if (a) setSettings(mapRuleSetToSettings(a)); }
+          setEmpresas(list);
+          setSelectedEmpresaId((prev) => (prev && list.some((e) => e.id === prev)) ? prev : (list.find((e) => e.isActive)?.id ?? list[0]?.id ?? ""));
         }
-      } catch { try { const raw = localStorage.getItem("markup_settings_rulesets_v1"); if (raw) { const store = JSON.parse(raw) as { ruleSets?: RawRuleSet[] }; const a = store?.ruleSets?.[0]; if (a) setSettings(mapRuleSetToSettings(a)); } } catch { /* ignore */ } }
+      } catch { /* sem empresas carregadas — a tela mostra o aviso de Configurações pendente */ }
     })();
     // Draft
     try {
       const raw = localStorage.getItem(DRAFT_KEY); if (!raw) return;
       const d = JSON.parse(raw) as Record<string, string>;
+      if (d.selectedEmpresaId) setSelectedEmpresaId(d.selectedEmpresaId);
       if (d.query) setQuery(d.query); if (d.selectedSku) setSelectedSku(d.selectedSku);
       if (d.manualName) setManualName(d.manualName); if (d.manualCmv) setManualCmv(d.manualCmv);
       if (d.manualMarkup) setManualMarkup(d.manualMarkup);
       if (d.channel) setChannel(d.channel);
       if (d.meliMode === "classic" || d.meliMode === "premium") setMeliMode(d.meliMode);
       if (d.magaluShipMode === "proprio" || d.magaluShipMode === "full") setMagaluShipMode(d.magaluShipMode);
-      if (d.regimeOverride) setRegimeOverride(d.regimeOverride as "default" | Regime);
       if (d.frete) setFrete(d.frete); if (d.margem) { setMargem(d.margem); setMargemDirty(true); }
       if (d.operMode === "fixed" || d.operMode === "percent") setOperMode(d.operMode);
       if (d.operValue) setOperValue(d.operValue);
@@ -293,8 +305,8 @@ export default function PrecificacaoPage() {
 
   const saveDraftDebounced = useDebouncedDraftSaver(250);
   useEffect(() => {
-    saveDraftDebounced(DRAFT_KEY, { query, selectedSku, manualName, manualCmv, channel, meliMode, magaluShipMode, regimeOverride, frete, margem, operMode, operValue, adsMode, adsValue, cardFeeValue, influencerMode, influencerValue, incentiveCreditOverride, descontoMode, descontoValue, rebateMode, rebateValue, commissionOverride, taxOverride, fixedOverride, creditFreteOverride, creditComissaoOverride });
-  }, [query, selectedSku, manualName, manualCmv, channel, meliMode, magaluShipMode, regimeOverride, frete, margem, operMode, operValue, adsMode, adsValue, cardFeeValue, influencerMode, influencerValue, incentiveCreditOverride, descontoMode, descontoValue, rebateMode, rebateValue, commissionOverride, taxOverride, fixedOverride, creditFreteOverride, creditComissaoOverride, saveDraftDebounced]);
+    saveDraftDebounced(DRAFT_KEY, { selectedEmpresaId, query, selectedSku, manualName, manualCmv, channel, meliMode, magaluShipMode, frete, margem, operMode, operValue, adsMode, adsValue, cardFeeValue, influencerMode, influencerValue, incentiveCreditOverride, descontoMode, descontoValue, rebateMode, rebateValue, commissionOverride, taxOverride, fixedOverride, creditFreteOverride, creditComissaoOverride });
+  }, [selectedEmpresaId, query, selectedSku, manualName, manualCmv, channel, meliMode, magaluShipMode, frete, margem, operMode, operValue, adsMode, adsValue, cardFeeValue, influencerMode, influencerValue, incentiveCreditOverride, descontoMode, descontoValue, rebateMode, rebateValue, commissionOverride, taxOverride, fixedOverride, creditFreteOverride, creditComissaoOverride, saveDraftDebounced]);
 
   const filteredProducts = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -310,8 +322,8 @@ export default function PrecificacaoPage() {
   const result = useMemo((): CalcResult | null => {
     if (!settings || !effectiveCmv || effectiveCmv <= 0) return null;
     const baseCh = settings.channels[effectiveChannel]; if (!baseCh) return null;
-    const regimeFinal: Regime = regimeOverride === "default" ? settings.regime : regimeOverride;
-    const mainTaxPercent = appliedAjustes.taxOverride.trim() ? parseNumberPt(appliedAjustes.taxOverride) : (regimeOverride === "default" ? baseCh.mainTaxPercent : (regimeFinal === "normal" ? 18 : 14));
+    const regimeFinal: Regime = settings.regime;
+    const mainTaxPercent = appliedAjustes.taxOverride.trim() ? parseNumberPt(appliedAjustes.taxOverride) : baseCh.mainTaxPercent;
     let commissionPercent = baseCh.commissionPercent;
     if (effectiveChannel === "meli" && baseCh.meli) commissionPercent = meliMode === "premium" ? baseCh.meli.premiumCommissionPercent : baseCh.meli.classicCommissionPercent;
     if (appliedAjustes.commissionOverride.trim()) commissionPercent = parseNumberPt(appliedAjustes.commissionOverride);
@@ -333,7 +345,7 @@ export default function PrecificacaoPage() {
     };
     if (effectiveChannel === "shopee" && !appliedAjustes.commissionOverride.trim() && !appliedAjustes.taxOverride.trim() && !appliedAjustes.fixedOverride.trim() && baseCh.shopee?.mode === "tiered") return solveWithShopeeTiered({ ...common, channelRaw: baseCh });
     return { ...solvePOR(common), channelUsed: ch, regimeUsed: regimeFinal };
-  }, [settings, effectiveCmv, effectiveMarkup, effectiveChannel, meliMode, magaluShipMode, frete, margemEfetiva, regimeOverride, appliedCustos, appliedAjustes]);
+  }, [settings, effectiveCmv, effectiveMarkup, effectiveChannel, meliMode, magaluShipMode, frete, margemEfetiva, appliedCustos, appliedAjustes]);
 
   const alerts = useMemo(() => {
     if (!result) return [];
@@ -356,12 +368,12 @@ export default function PrecificacaoPage() {
     <div className="space-y-7">
       <div>
         <h1 className="text-[27px] font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>Qual o preço ideal?</h1>
-        <p className="mt-1.5 text-sm" style={{ color: "var(--muted)" }}>Escolha o produto e o canal — o resto o Markup calcula para você.</p>
+        <p className="mt-1.5 text-sm" style={{ color: "var(--muted)" }}>Escolha a empresa, o produto e o canal — o resto o Markup calcula para você.</p>
       </div>
 
-      {!settings && (
+      {empresas.length === 0 && (
         <div className="rounded-2xl border p-5 text-sm" style={{ borderColor: "var(--warn-soft)", background: "var(--warn-soft)", color: "var(--warn)" }}>
-          Ainda não encontrei Configurações salvas. Vá em <b>Configurações</b>, salve e volte aqui.
+          Ainda não encontrei nenhuma empresa cadastrada. Vá em <b>Configurações</b>, cadastre uma empresa e volte aqui.
         </div>
       )}
 
@@ -369,8 +381,28 @@ export default function PrecificacaoPage() {
       {/* COLUNA ESQUERDA — formulário */}
       <div className="max-w-2xl space-y-7">
 
-      {/* PASSO 1 — PRODUTO */}
-      <Step n={1} label="Produto">
+      {/* PASSO 1 — EMPRESA */}
+      <Step n={1} label="Empresa">
+        <select
+          value={selectedEmpresaId}
+          onChange={(e) => { setSelectedEmpresaId(e.target.value); setMargemDirty(false); }}
+          className="w-full rounded-xl border px-3.5 py-3 text-sm outline-none"
+          style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
+        >
+          {empresas.length === 0 && <option value="">Nenhuma empresa cadastrada</option>}
+          {empresas.map((e) => (
+            <option key={e.id} value={e.id}>{e.isActive ? "⭐ " : ""}{e.name}</option>
+          ))}
+        </select>
+        {settings && (
+          <p className="mt-1.5 text-[12px]" style={{ color: "var(--muted)" }}>
+            {settings.regime === "normal" ? `Regime Normal · imposto ${settings.channels[availableChannels[0]]?.mainTaxPercent ?? 18}%` : "Simples Nacional · imposto 14%"} · UF {settings.ufOrigem}
+          </p>
+        )}
+      </Step>
+
+      {/* PASSO 2 — PRODUTO */}
+      <Step n={2} label="Produto">
         <div className="relative">
           <div className="flex items-center gap-2.5 rounded-xl border px-3.5 py-3" style={{ background: "var(--surface)", borderColor: picked ? "var(--accent-soft-border)" : "var(--border)" }}>
             <svg width="16" height="16" viewBox="0 0 20 20" style={{ stroke: "var(--muted)", flexShrink: 0 }} fill="none" strokeWidth="1.6" strokeLinecap="round">
@@ -431,8 +463,8 @@ export default function PrecificacaoPage() {
         </div>
       </Step>
 
-      {/* PASSO 2 — CANAL */}
-      <Step n={2} label="Canal de venda">
+      {/* PASSO 3 — CANAL */}
+      <Step n={3} label="Canal de venda">
         <div className="flex flex-wrap gap-2">
           {availableChannels.map((k) => {
             const active = effectiveChannel === k;
@@ -466,24 +498,10 @@ export default function PrecificacaoPage() {
             ))}
           </div>
         )}
-
-        <label className="mt-3 grid gap-1">
-          <span className="text-xs" style={{ color: "var(--muted)" }}>Regime tributário</span>
-          <select
-            value={regimeOverride}
-            onChange={(e) => setRegimeOverride(e.target.value as "default" | Regime)}
-            className="rounded-lg border px-3.5 py-2.5 text-sm outline-none"
-            style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
-          >
-            <option value="default">Usar Configurações</option>
-            <option value="simples">Simples Nacional</option>
-            <option value="normal">Regime normal</option>
-          </select>
-        </label>
       </Step>
 
-      {/* PASSO 3 — CUSTOS E MARGEM */}
-      <Step n={3} label="Custos e margem">
+      {/* PASSO 4 — CUSTOS E MARGEM */}
+      <Step n={4} label="Custos e margem">
         <div className="grid gap-3 md:grid-cols-2">
           <label className="grid gap-1">
             <span className="text-xs" style={{ color: "var(--muted)" }}>Frete (R$)<InfoTip text="Frete fixo estimado." /></span>
@@ -558,7 +576,7 @@ export default function PrecificacaoPage() {
       {/* RESULTADO */}
       {!result ? (
         <div className="rounded-2xl border p-5 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }}>
-          {!settings ? "Configure as Configurações e salve antes de calcular." : (!effectiveCmv || effectiveCmv <= 0) ? "Informe o CMV do produto (manual ou cadastrado)." : "Informe um CMV válido e verifique se Configurações estão salvas."}
+          {!settings ? "Cadastre uma empresa em Configurações antes de calcular." : (!effectiveCmv || effectiveCmv <= 0) ? "Informe o CMV do produto (manual ou cadastrado)." : "Informe um CMV válido para calcular."}
         </div>
       ) : (
         <>

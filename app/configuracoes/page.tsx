@@ -23,7 +23,7 @@ type RuleSetData = {
       enabled: boolean;
       commissionPercent: number;
       taxFixed: number;
-      mainTaxPercent: number; // 18 ou 14 conforme regime
+      mainTaxPercent: number; // imposto principal — mesmo valor em todos os canais da empresa
       targetMarginPercent: number; // margem desejada por canal
       pisCofinsPercent?: number;
       cardFeePercent?: number;
@@ -37,8 +37,6 @@ type RuleSetData = {
 
   meli: {
     plan: MeliPlan;
-    classicActive?: boolean;
-    premiumActive?: boolean;
     classicCommissionPercent: number;
     premiumCommissionPercent: number;
   };
@@ -46,7 +44,7 @@ type RuleSetData = {
   shopeeTiers: ShopeeTier[];
 };
 
-type RuleSetRow = {
+type EmpresaRow = {
   id: string;
   name: string;
   isActive: boolean;
@@ -64,16 +62,16 @@ function deepClone<T>(obj: T): T {
 }
 
 export default function ConfiguracoesPage() {
-  const [rulesets, setRulesets] = useState<RuleSetRow[]>([]);
+  const [empresas, setEmpresas] = useState<EmpresaRow[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
   const [draft, setDraft] = useState<RuleSetData | null>(null);
 
-  const [newName, setNewName] = useState("Nova Regra");
+  const [newName, setNewName] = useState("Nova empresa");
   const [renameText, setRenameText] = useState("");
   const [status, setStatus] = useState<string>("");
 
-  const selected = useMemo(() => rulesets.find((r) => r.id === selectedId) ?? null, [rulesets, selectedId]);
-  const active = useMemo(() => rulesets.find((r) => r.isActive) ?? null, [rulesets]);
+  const selected = useMemo(() => empresas.find((r) => r.id === selectedId) ?? null, [empresas, selectedId]);
+  const padrao = useMemo(() => empresas.find((r) => r.isActive) ?? null, [empresas]);
 
   async function load() {
     setStatus("Carregando...");
@@ -83,8 +81,8 @@ export default function ConfiguracoesPage() {
       setStatus(json?.error ?? "Erro ao carregar");
       return;
     }
-    const list = (json?.rulesets ?? []) as RuleSetRow[];
-    setRulesets(list);
+    const list = (json?.rulesets ?? []) as EmpresaRow[];
+    setEmpresas(list);
 
     const activeId = list.find((x) => x.isActive)?.id ?? list[0]?.id ?? "";
     setSelectedId(activeId);
@@ -100,8 +98,8 @@ export default function ConfiguracoesPage() {
     load();
   }, []);
 
-  // Quando o usuário troca o ruleset selecionado (dropdown), o draft/nome exibidos precisam
-  // resetar para os dados do novo ruleset. Ajuste durante a renderização (em vez de useEffect)
+  // Quando o usuário troca de empresa (dropdown), o draft/nome exibidos precisam
+  // resetar para os dados da nova empresa. Ajuste durante a renderização (em vez de useEffect)
   // evita uma passagem de render extra — ver "Adjusting state when a prop changes" nos docs do React.
   const [prevSelectedId, setPrevSelectedId] = useState(selectedId);
   if (selected && selectedId !== prevSelectedId) {
@@ -117,11 +115,21 @@ export default function ConfiguracoesPage() {
     const next = deepClone(draft);
     next.regime = regime;
 
-    // aplica imposto padrão em todos os canais (editável depois se quiser)
+    // Imposto principal é o mesmo em todos os canais desta empresa.
     (Object.keys(next.channels) as ChannelKey[]).forEach((k) => {
       next.channels[k].mainTaxPercent = mainTaxPercent;
     });
 
+    setDraft(next);
+  }
+
+  function setImpostoPrincipal(v: string) {
+    if (!draft) return;
+    const value = num(v, draft.regime === "normal" ? 18 : 14);
+    const next = deepClone(draft);
+    (Object.keys(next.channels) as ChannelKey[]).forEach((k) => {
+      next.channels[k].mainTaxPercent = value;
+    });
     setDraft(next);
   }
 
@@ -179,7 +187,7 @@ export default function ConfiguracoesPage() {
 
   async function activate() {
     if (!selectedId) return;
-    setStatus("Ativando...");
+    setStatus("Definindo como padrão...");
     const res = await fetch("/api/settings/rulesets", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -187,10 +195,10 @@ export default function ConfiguracoesPage() {
     });
     const json = await res.json();
     if (!res.ok) {
-      setStatus(json?.error ?? "Erro ao ativar");
+      setStatus(json?.error ?? "Erro ao definir como padrão");
       return;
     }
-    setStatus("✅ Regra ativa");
+    setStatus("✅ Empresa padrão definida");
     await load();
   }
 
@@ -207,7 +215,7 @@ export default function ConfiguracoesPage() {
       setStatus(json?.error ?? "Erro ao criar");
       return;
     }
-    setStatus("✅ Criado");
+    setStatus("✅ Empresa criada");
     await load();
   }
 
@@ -228,11 +236,11 @@ export default function ConfiguracoesPage() {
     await load();
   }
 
-  async function removeRuleset() {
+  async function removeEmpresa() {
     if (!selectedId) return;
-    const row = rulesets.find((r) => r.id === selectedId);
+    const row = empresas.find((r) => r.id === selectedId);
     if (row?.isActive) {
-      setStatus("❌ Não dá pra excluir a regra ativa.");
+      setStatus("❌ Defina outra empresa como padrão antes de excluir esta.");
       return;
     }
     setStatus("Excluindo...");
@@ -249,22 +257,25 @@ export default function ConfiguracoesPage() {
   if (!draft) {
     return (
       <div>
-        <h1 className="text-2xl font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>Configurações</h1>
+        <h1 className="text-2xl font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>Empresas</h1>
         <p className="mt-2 text-sm" style={{ color: "var(--muted)" }}>{status || "Inicializando..."}</p>
       </div>
     );
   }
 
   const mainTax = draft.regime === "normal" ? 18 : 14;
+  const impostoPrincipal = draft.channels.magalu?.mainTaxPercent ?? mainTax;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-[27px] font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>Configurações</h1>
-          <p className="mt-1.5 text-sm" style={{ color: "var(--muted)" }}>
-            Regra ativa: <span className="font-medium" style={{ color: "var(--text)" }}>{active?.name ?? "—"}</span>{" "}
-            <span style={{ color: "var(--muted)" }}>({active?.id ? "ativa" : "nenhuma"})</span>
+          <h1 className="text-[27px] font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>Empresas</h1>
+          <p className="mt-1.5 max-w-lg text-sm" style={{ color: "var(--muted)" }}>
+            Cada empresa tem sua própria regra tributária, comissões e margens por canal — configure quantas precisar.
+          </p>
+          <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
+            Empresa padrão: <span className="font-medium" style={{ color: "var(--text)" }}>{padrao?.name ?? "—"}</span>
           </p>
         </div>
 
@@ -281,29 +292,30 @@ export default function ConfiguracoesPage() {
             className="rounded-full border px-5 py-2.5 text-sm font-semibold"
             style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}
           >
-            Definir como ativa
+            Usar como padrão
           </button>
         </div>
       </div>
 
       {status ? <div className="rounded-xl border px-4 py-2.5 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)", color: "var(--text)" }}>{status}</div> : null}
 
-      {/* Seleção de ruleset */}
+      {/* Seleção de empresa */}
       <div className="rounded-2xl border p-4 space-y-3" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
-            <label className="text-sm font-medium">Selecionar regra</label>
+            <label className="text-sm font-medium">Empresa</label>
             <select
               value={selectedId}
               onChange={(e) => setSelectedId(e.target.value)}
               className="border rounded-lg px-3 py-2 text-sm" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
             >
-              {rulesets.map((r) => (
+              {empresas.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.isActive ? "⭐ " : ""}{r.name}
                 </option>
               ))}
             </select>
+            <span className="text-xs" style={{ color: "var(--muted)" }}>{empresas.length} empresa{empresas.length === 1 ? "" : "s"} cadastrada{empresas.length === 1 ? "" : "s"}</span>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
@@ -311,35 +323,35 @@ export default function ConfiguracoesPage() {
               value={renameText}
               onChange={(e) => setRenameText(e.target.value)}
               className="border rounded-lg px-3 py-2 text-sm" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
-              placeholder="Nome da regra"
+              placeholder="Nome da empresa"
             />
             <button onClick={rename} className="px-3 py-2 rounded-lg border text-sm" style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}>
               Renomear
             </button>
-            <button onClick={removeRuleset} className="px-3 py-2 rounded-lg border text-sm" style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}>
+            <button onClick={removeEmpresa} className="px-3 py-2 rounded-lg border text-sm" style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}>
               Excluir
             </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap pt-2 border-t">
+        <div className="flex items-center gap-2 flex-wrap pt-2 border-t" style={{ borderColor: "var(--border)" }}>
           <input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             className="border rounded-lg px-3 py-2 text-sm" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
-            placeholder="Nome da nova regra"
+            placeholder="Nome da nova empresa"
           />
           <button onClick={createNew} className="rounded-lg px-3 py-2 text-sm font-semibold" style={{ background: "var(--accent)", color: "var(--accent-ink)" }}>
-            Criar nova regra (copia a atual)
+            Nova empresa (copia a atual)
           </button>
         </div>
       </div>
 
-      {/* Regime / UF */}
+      {/* Regime / UF / Imposto principal */}
       <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-        <h2 className="text-lg font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>Impostos (Regime)</h2>
+        <h2 className="text-lg font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>Regime tributário</h2>
 
-        <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex items-end gap-4 flex-wrap">
           <div className="flex items-center gap-2">
             <label className="text-sm font-medium">Regime</label>
             <select
@@ -347,7 +359,7 @@ export default function ConfiguracoesPage() {
               onChange={(e) => setRegime(e.target.value === "simples" ? "simples" : "normal")}
               className="border rounded-lg px-3 py-2 text-sm" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
             >
-              <option value="normal">Normal (padrão) — 18%</option>
+              <option value="normal">Regime Normal</option>
               <option value="simples">Simples Nacional — 14%</option>
             </select>
           </div>
@@ -363,10 +375,26 @@ export default function ConfiguracoesPage() {
             />
           </div>
 
-          <div className="text-sm" style={{ color: "var(--muted)" }}>
-            Imposto principal atual aplicado nos canais: <span className="font-semibold" style={{ color: "var(--text)" }}>{mainTax}%</span>
-          </div>
+          {draft.regime === "simples" ? (
+            <div className="rounded-lg border px-3 py-2 text-sm" style={{ background: "var(--surface-soft)", borderColor: "var(--border)", color: "var(--muted2)" }}>
+              Imposto principal fixo em <b style={{ color: "var(--text)" }}>14%</b> no Simples Nacional.
+            </div>
+          ) : (
+            <div className="w-40">
+              <Field
+                label="Imposto principal %"
+                value={impostoPrincipal}
+                onChange={setImpostoPrincipal}
+              />
+            </div>
+          )}
         </div>
+
+        {draft.regime === "normal" && (
+          <p className="text-xs" style={{ color: "var(--muted)" }}>
+            O ICMS varia conforme o estado (UF origem) da empresa — ajuste aqui o percentual correto. Ele vale para todos os canais.
+          </p>
+        )}
       </div>
 
       {/* Canais */}
@@ -393,20 +421,15 @@ export default function ConfiguracoesPage() {
               value={draft.channels.magalu.commissionPercent}
               onChange={(v) => updateChannel("magalu", { commissionPercent: num(v, 18) })}
             />
-              <Field
-                label="Margem desejada %"
-                value={draft.channels.magalu.targetMarginPercent}
-                onChange={(v) => updateChannel("magalu", { targetMarginPercent: num(v, 15) })}
-              />
+            <Field
+              label="Margem desejada %"
+              value={draft.channels.magalu.targetMarginPercent}
+              onChange={(v) => updateChannel("magalu", { targetMarginPercent: num(v, 15) })}
+            />
             <Field
               label="Taxa fixa R$ (por produto)"
               value={draft.channels.magalu.taxFixed}
               onChange={(v) => updateChannel("magalu", { taxFixed: num(v, 5) })}
-            />
-            <Field
-              label="Imposto % (auto)"
-              value={draft.channels.magalu.mainTaxPercent}
-              onChange={(v) => updateChannel("magalu", { mainTaxPercent: num(v, mainTax) })}
             />
             <Hint text="Padrão: 18% + R$5/item" />
           </div>
@@ -417,14 +440,18 @@ export default function ConfiguracoesPage() {
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h3 className="font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>Mercado Livre (Meli)</h3>
             <label className="text-sm flex items-center gap-2">
-              <input type="checkbox" checked={true} disabled />
-              <span title="Canal sempre ativo para seleção no motor" className="text-xs">Ativo</span>
+              <input
+                type="checkbox"
+                checked={draft.channels.meli.enabled}
+                onChange={(e) => updateChannel("meli", { enabled: e.target.checked })}
+              />
+              Ativo
             </label>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div className="space-y-1">
-              <div className="text-sm font-medium">Plano</div>
+              <div className="text-sm font-medium" style={{ color: "var(--muted2)" }}>Plano</div>
               <select
                 value={draft.meli.plan}
                 onChange={(e) => updateMeli({ plan: e.target.value === "classic" ? "classic" : "premium" })}
@@ -450,37 +477,19 @@ export default function ConfiguracoesPage() {
               onChange={(v) => updateMeli({ premiumCommissionPercent: num(v, 16.5) })}
             />
             <Field
-              label="Imposto % (auto)"
-              value={draft.channels.meli.mainTaxPercent}
-              onChange={(v) => updateChannel("meli", { mainTaxPercent: num(v, mainTax) })}
-            />
-          </div>
-
-          <div className="text-xs" style={{ color: "var(--muted)" }}>
-            Dica: se quiser, dá pra colocar taxa fixa do MELI aqui também (abaixo) e salvar.
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <Field
               label="Taxa fixa R$ (opcional)"
               value={draft.channels.meli.taxFixed}
               onChange={(v) => updateChannel("meli", { taxFixed: num(v, 0) })}
             />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <Field
               label="Margem desejada %"
               value={draft.channels.meli.targetMarginPercent}
               onChange={(v) => updateChannel("meli", { targetMarginPercent: num(v, 13) })}
             />
-            <div className="flex flex-col justify-center">
-              <label className="text-sm">Clássico</label>
-              <input type="checkbox" checked={true} disabled className="mt-1" />
-            </div>
-            <div className="flex flex-col justify-center">
-              <label className="text-sm">Premium</label>
-              <input type="checkbox" checked={true} disabled className="mt-1" />
-            </div>
-            <Hint text="Padrões são editáveis e ficam salvos no RuleSet" />
-            <Hint text="Imposto segue o regime" />
+            <Hint text="Padrões são editáveis e ficam salvos nesta empresa" />
           </div>
         </div>
 
@@ -499,7 +508,7 @@ export default function ConfiguracoesPage() {
           </div>
 
           <div className="text-sm" style={{ color: "var(--muted)" }}>
-            Configure faixas de preço com <b>comissão %</b> e <b>taxa fixa R$</b>. Isso vira teu padrão e pode ser alterado a qualquer momento.
+            Configure faixas de preço com <b>comissão %</b> e <b>taxa fixa R$</b>. Isso vira o padrão desta empresa e pode ser alterado a qualquer momento.
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -586,7 +595,7 @@ export default function ConfiguracoesPage() {
             </button>
 
             <div className="text-xs" style={{ color: "var(--muted)" }}>
-              Imposto do canal: {draft.channels.shopee.mainTaxPercent}% (segue o regime)
+              Imposto do canal: {draft.channels.shopee.mainTaxPercent}% (imposto principal da empresa)
             </div>
           </div>
         </div>
@@ -621,11 +630,6 @@ export default function ConfiguracoesPage() {
               value={draft.channels.site.taxFixed}
               onChange={(v) => updateChannel("site", { taxFixed: num(v, 0) })}
             />
-            <Field
-              label="Imposto % (auto)"
-              value={draft.channels.site.mainTaxPercent}
-              onChange={(v) => updateChannel("site", { mainTaxPercent: num(v, mainTax) })}
-            />
             <Hint text="Padrão: 1%" />
           </div>
         </div>
@@ -651,11 +655,6 @@ export default function ConfiguracoesPage() {
               onChange={(v) => updateChannel("site_modifika", { commissionPercent: num(v, 1) })}
             />
             <Field
-              label="Imposto %"
-              value={draft.channels.site_modifika?.mainTaxPercent ?? 18}
-              onChange={(v) => updateChannel("site_modifika", { mainTaxPercent: num(v, 18) })}
-            />
-            <Field
               label="PIS e Cofins %"
               value={draft.channels.site_modifika?.pisCofinsPercent ?? 6}
               onChange={(v) => updateChannel("site_modifika", { pisCofinsPercent: num(v, 6) })}
@@ -665,6 +664,7 @@ export default function ConfiguracoesPage() {
               value={draft.channels.site_modifika?.targetMarginPercent ?? 15}
               onChange={(v) => updateChannel("site_modifika", { targetMarginPercent: num(v, 15) })}
             />
+            <Hint text="Imposto principal segue o campo da empresa, acima" />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <Field label="Taxa cartão %" value={draft.channels.site_modifika?.cardFeePercent ?? 10} onChange={(v) => updateChannel("site_modifika", { cardFeePercent: num(v, 10) })} />
@@ -704,11 +704,6 @@ export default function ConfiguracoesPage() {
               value={draft.channels.outros.taxFixed}
               onChange={(v) => updateChannel("outros", { taxFixed: num(v, 0) })}
             />
-            <Field
-              label="Imposto % (auto)"
-              value={draft.channels.outros.mainTaxPercent}
-              onChange={(v) => updateChannel("outros", { mainTaxPercent: num(v, mainTax) })}
-            />
             <Hint text="Padrão: 18%" />
           </div>
         </div>
@@ -718,9 +713,11 @@ export default function ConfiguracoesPage() {
       <div className="rounded-2xl border p-4 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted2)" }}>
         <div className="mb-1 font-semibold" style={{ color: "var(--text)" }}>Nota do motor de cálculo</div>
         <ul className="list-disc pl-5 space-y-1">
+          <li>O imposto principal é <b>único por empresa</b> — vale para todos os canais, edite no card &ldquo;Regime tributário&rdquo;.</li>
           <li>O canal <b>Meli</b> usa a comissão do <b>plano</b> selecionado (Clássico/Premium).</li>
           <li>O canal <b>Shopee</b> usa a faixa que encaixa no preço (tiers).</li>
-          <li>Todos os padrões são <b>editáveis</b>, e você pode criar <b>novas regras</b> e definir qual fica ativa.</li>
+          <li>Canais desmarcados como <b>Ativo</b> não aparecem na Precificação para esta empresa.</li>
+          <li>Você pode cadastrar <b>quantas empresas precisar</b> e escolher qual usar em cada precificação.</li>
         </ul>
       </div>
     </div>
@@ -731,7 +728,7 @@ function Field(props: { label: string; value: number; onChange: (v: string) => v
   const { label, value, onChange } = props;
   const [text, setText] = useState<string>(typeof value === "number" ? String(value).replace(".", ",") : "");
 
-  // Ajusta o texto exibido quando o valor externo muda (ex: troca de canal/ruleset),
+  // Ajusta o texto exibido quando o valor externo muda (ex: troca de canal/empresa),
   // sem usar useEffect — ver nota equivalente em ConfiguracoesPage acima.
   const [prevValue, setPrevValue] = useState(value);
   if (value !== prevValue) {
