@@ -31,7 +31,7 @@ export function PasswordInput({
   disabled = false,
 }: {
   value: string;
-  onChangeAction: (v: string) => void; // ✅ nome termina com Action (some o warning)
+  onChangeAction: (v: string) => void; // nome termina com Action (some o warning)
   placeholder?: string;
   autoComplete?: string;
   disabled?: boolean;
@@ -46,14 +46,16 @@ export function PasswordInput({
         type={show ? "text" : "password"}
         autoComplete={autoComplete}
         disabled={disabled}
-        className="w-full rounded-xl bg-neutral-950/60 px-4 py-3 pr-11 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60 disabled:opacity-60"
+        className="w-full rounded-xl border px-4 py-3 pr-11 text-sm outline-none disabled:opacity-60"
+        style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
         placeholder={placeholder}
       />
 
       <button
         type="button"
         onClick={() => setShow((s) => !s)}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 transition disabled:opacity-50"
+        className="absolute right-3 top-1/2 -translate-y-1/2 transition disabled:opacity-50"
+        style={{ color: "var(--muted)" }}
         tabIndex={-1}
         aria-label={show ? "Ocultar senha" : "Mostrar senha"}
         disabled={disabled}
@@ -76,7 +78,8 @@ export function GoogleButton({
     <button
       type="button"
       onClick={() => signIn("google", { callbackUrl })}
-      className="w-full rounded-xl bg-white/10 px-4 py-3 text-sm font-semibold text-white ring-1 ring-white/10 hover:bg-white/15"
+      className="w-full rounded-xl border px-4 py-3 text-sm font-semibold transition-colors"
+      style={{ borderColor: "var(--border-strong)", color: "var(--text)", background: "var(--surface)" }}
     >
       {label}
     </button>
@@ -89,7 +92,8 @@ export function SignOutButton() {
     <button
       type="button"
       onClick={() => signOut({ callbackUrl: "/" })}
-      className="rounded-xl bg-white/10 px-3 py-2 text-xs font-semibold text-white ring-1 ring-white/10 hover:bg-white/15"
+      className="rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors"
+      style={{ background: "var(--surface-soft)", color: "var(--muted2)" }}
     >
       Sair
     </button>
@@ -134,20 +138,21 @@ export function CredentialsLogin() {
   return (
     <form onSubmit={onSubmit} className="grid gap-3">
       <label className="grid gap-1">
-        <span className="text-xs text-white/60">Email</span>
+        <span className="text-xs" style={{ color: "var(--muted)" }}>Email</span>
         <input
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           type="email"
           autoComplete="email"
           disabled={loading}
-          className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60 disabled:opacity-60"
+          className="rounded-xl border px-4 py-3 text-sm outline-none disabled:opacity-60"
+          style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
           placeholder="seu@email.com"
         />
       </label>
 
       <label className="grid gap-1">
-        <span className="text-xs text-white/60">Senha</span>
+        <span className="text-xs" style={{ color: "var(--muted)" }}>Senha</span>
         <PasswordInput
           value={password}
           onChangeAction={setPassword}
@@ -156,7 +161,7 @@ export function CredentialsLogin() {
       </label>
 
       {err && (
-        <div className="rounded-xl border border-rose-500/25 bg-rose-500/10 px-4 py-2 text-sm text-rose-100">
+        <div className="rounded-xl border px-4 py-2 text-sm" style={{ borderColor: "var(--crit-soft)", background: "var(--crit-soft)", color: "var(--crit)" }}>
           {err}
         </div>
       )}
@@ -164,11 +169,8 @@ export function CredentialsLogin() {
       <button
         type="submit"
         disabled={loading}
-        className={
-          loading
-            ? "w-full cursor-not-allowed rounded-xl bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-200/60 ring-1 ring-emerald-500/10"
-            : "w-full rounded-xl bg-emerald-500/15 px-4 py-3 text-sm font-semibold text-emerald-200 ring-1 ring-emerald-500/20 hover:bg-emerald-500/20"
-        }
+        className="w-full rounded-xl px-4 py-3 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+        style={{ background: "var(--accent)", color: "var(--accent-ink)" }}
       >
         {loading ? "Entrando..." : "Entrar"}
       </button>

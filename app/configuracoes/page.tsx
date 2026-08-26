@@ -248,9 +248,9 @@ export default function ConfiguracoesPage() {
 
   if (!draft) {
     return (
-      <div className="p-6">
-        <h1 className="text-xl font-semibold">Configurações</h1>
-        <p className="mt-2 text-sm text-gray-600">{status || "Inicializando..."}</p>
+      <div>
+        <h1 className="text-2xl font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>Configurações</h1>
+        <p className="mt-2 text-sm" style={{ color: "var(--muted)" }}>{status || "Inicializando..."}</p>
       </div>
     );
   }
@@ -258,47 +258,45 @@ export default function ConfiguracoesPage() {
   const mainTax = draft.regime === "normal" ? 18 : 14;
 
   return (
-    <div className="p-6 space-y-6">
-      <style jsx global>{`
-        select { background: #0f1720; color: #fff; border-color: #374151; }
-        select option { color: #111 !important; background: #fff !important; }
-      `}</style>
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Configurações (RuleSets)</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            Regra ativa: <span className="font-medium">{active?.name ?? "—"}</span>{" "}
-            <span className="text-gray-400">({active?.id ? "ativa" : "nenhuma"})</span>
+          <h1 className="text-[27px] font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>Configurações</h1>
+          <p className="mt-1.5 text-sm" style={{ color: "var(--muted)" }}>
+            Regra ativa: <span className="font-medium" style={{ color: "var(--text)" }}>{active?.name ?? "—"}</span>{" "}
+            <span style={{ color: "var(--muted)" }}>({active?.id ? "ativa" : "nenhuma"})</span>
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <button
             onClick={save}
-            className="px-4 py-2 rounded-lg bg-black text-white text-sm hover:opacity-90"
+            className="rounded-full px-5 py-2.5 text-sm font-semibold"
+            style={{ background: "var(--accent)", color: "var(--accent-ink)" }}
           >
             Salvar
           </button>
           <button
             onClick={activate}
-            className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:opacity-90"
+            className="rounded-full border px-5 py-2.5 text-sm font-semibold"
+            style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}
           >
             Definir como ativa
           </button>
         </div>
       </div>
 
-      {status ? <div className="text-sm text-gray-700">{status}</div> : null}
+      {status ? <div className="rounded-xl border px-4 py-2.5 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)", color: "var(--text)" }}>{status}</div> : null}
 
       {/* Seleção de ruleset */}
-      <div className="rounded-2xl border p-4 space-y-3">
+      <div className="rounded-2xl border p-4 space-y-3" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <label className="text-sm font-medium">Selecionar regra</label>
             <select
               value={selectedId}
               onChange={(e) => setSelectedId(e.target.value)}
-              className="border rounded-lg px-3 py-2 text-sm"
+              className="border rounded-lg px-3 py-2 text-sm" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
             >
               {rulesets.map((r) => (
                 <option key={r.id} value={r.id}>
@@ -312,13 +310,13 @@ export default function ConfiguracoesPage() {
             <input
               value={renameText}
               onChange={(e) => setRenameText(e.target.value)}
-              className="border rounded-lg px-3 py-2 text-sm"
+              className="border rounded-lg px-3 py-2 text-sm" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
               placeholder="Nome da regra"
             />
-            <button onClick={rename} className="px-3 py-2 rounded-lg border text-sm hover:bg-gray-50">
+            <button onClick={rename} className="px-3 py-2 rounded-lg border text-sm" style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}>
               Renomear
             </button>
-            <button onClick={removeRuleset} className="px-3 py-2 rounded-lg border text-sm hover:bg-gray-50">
+            <button onClick={removeRuleset} className="px-3 py-2 rounded-lg border text-sm" style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}>
               Excluir
             </button>
           </div>
@@ -328,18 +326,18 @@ export default function ConfiguracoesPage() {
           <input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            className="border rounded-lg px-3 py-2 text-sm"
+            className="border rounded-lg px-3 py-2 text-sm" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
             placeholder="Nome da nova regra"
           />
-          <button onClick={createNew} className="px-3 py-2 rounded-lg bg-green-600 text-white text-sm hover:opacity-90">
+          <button onClick={createNew} className="rounded-lg px-3 py-2 text-sm font-semibold" style={{ background: "var(--accent)", color: "var(--accent-ink)" }}>
             Criar nova regra (copia a atual)
           </button>
         </div>
       </div>
 
       {/* Regime / UF */}
-      <div className="rounded-2xl border p-4 space-y-4">
-        <h2 className="text-lg font-semibold">Impostos (Regime)</h2>
+      <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+        <h2 className="text-lg font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>Impostos (Regime)</h2>
 
         <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-2">
@@ -347,7 +345,7 @@ export default function ConfiguracoesPage() {
             <select
               value={draft.regime}
               onChange={(e) => setRegime(e.target.value === "simples" ? "simples" : "normal")}
-              className="border rounded-lg px-3 py-2 text-sm"
+              className="border rounded-lg px-3 py-2 text-sm" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
             >
               <option value="normal">Normal (padrão) — 18%</option>
               <option value="simples">Simples Nacional — 14%</option>
@@ -360,24 +358,25 @@ export default function ConfiguracoesPage() {
               value={draft.ufOrigem}
               onChange={(e) => setDraft({ ...draft, ufOrigem: e.target.value.toUpperCase().slice(0, 2) })}
               className="border rounded-lg px-3 py-2 text-sm w-20"
+              style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
               placeholder="RS"
             />
           </div>
 
-          <div className="text-sm text-gray-600">
-            Imposto principal atual aplicado nos canais: <span className="font-semibold">{mainTax}%</span>
+          <div className="text-sm" style={{ color: "var(--muted)" }}>
+            Imposto principal atual aplicado nos canais: <span className="font-semibold" style={{ color: "var(--text)" }}>{mainTax}%</span>
           </div>
         </div>
       </div>
 
       {/* Canais */}
-      <div className="rounded-2xl border p-4 space-y-5">
-        <h2 className="text-lg font-semibold">Canais</h2>
+      <div className="rounded-2xl border p-4 space-y-5" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+        <h2 className="text-lg font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>Canais</h2>
 
         {/* MAGALU */}
-        <div className="rounded-2xl border p-4 space-y-3">
+        <div className="rounded-2xl border p-4 space-y-3" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold">Magalu</h3>
+            <h3 className="font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>Magalu</h3>
             <label className="text-sm flex items-center gap-2">
               <input
                 type="checkbox"
@@ -414,9 +413,9 @@ export default function ConfiguracoesPage() {
         </div>
 
         {/* MELI */}
-        <div className="rounded-2xl border p-4 space-y-3">
+        <div className="rounded-2xl border p-4 space-y-3" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <h3 className="font-semibold">Mercado Livre (Meli)</h3>
+            <h3 className="font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>Mercado Livre (Meli)</h3>
             <label className="text-sm flex items-center gap-2">
               <input type="checkbox" checked={true} disabled />
               <span title="Canal sempre ativo para seleção no motor" className="text-xs">Ativo</span>
@@ -430,11 +429,12 @@ export default function ConfiguracoesPage() {
                 value={draft.meli.plan}
                 onChange={(e) => updateMeli({ plan: e.target.value === "classic" ? "classic" : "premium" })}
                 className="border rounded-lg px-3 py-2 text-sm w-full"
+                style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
               >
                 <option value="classic">Clássico</option>
                 <option value="premium">Premium</option>
               </select>
-              <div className="text-xs text-gray-500">
+              <div className="text-xs" style={{ color: "var(--muted)" }}>
                 A comissão usada no cálculo vem do plano selecionado.
               </div>
             </div>
@@ -456,7 +456,7 @@ export default function ConfiguracoesPage() {
             />
           </div>
 
-          <div className="text-xs text-gray-600">
+          <div className="text-xs" style={{ color: "var(--muted)" }}>
             Dica: se quiser, dá pra colocar taxa fixa do MELI aqui também (abaixo) e salvar.
           </div>
 
@@ -485,9 +485,9 @@ export default function ConfiguracoesPage() {
         </div>
 
         {/* SHOPEE */}
-        <div className="rounded-2xl border p-4 space-y-3">
+        <div className="rounded-2xl border p-4 space-y-3" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <h3 className="font-semibold">Shopee (por faixa)</h3>
+            <h3 className="font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>Shopee (por faixa)</h3>
             <label className="text-sm flex items-center gap-2">
               <input
                 type="checkbox"
@@ -498,7 +498,7 @@ export default function ConfiguracoesPage() {
             </label>
           </div>
 
-          <div className="text-sm text-gray-600">
+          <div className="text-sm" style={{ color: "var(--muted)" }}>
             Configure faixas de preço com <b>comissão %</b> e <b>taxa fixa R$</b>. Isso vira teu padrão e pode ser alterado a qualquer momento.
           </div>
 
@@ -513,25 +513,26 @@ export default function ConfiguracoesPage() {
             <div />
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-[720px] w-full text-sm border rounded-lg overflow-hidden">
-              <thead className="bg-gray-50">
+          <div className="overflow-x-auto rounded-lg border" style={{ borderColor: "var(--border)" }}>
+            <table className="w-full min-w-[720px] text-sm">
+              <thead style={{ background: "var(--surface-soft)" }}>
                 <tr className="text-left">
-                  <th className="p-2 border-b">Min</th>
-                  <th className="p-2 border-b">Max (vazio = ∞)</th>
-                  <th className="p-2 border-b">Comissão %</th>
-                  <th className="p-2 border-b">Taxa fixa R$</th>
-                  <th className="p-2 border-b"></th>
+                  <th className="border-b p-2" style={{ borderColor: "var(--border)", color: "var(--muted2)" }}>Min</th>
+                  <th className="border-b p-2" style={{ borderColor: "var(--border)", color: "var(--muted2)" }}>Max (vazio = ∞)</th>
+                  <th className="border-b p-2" style={{ borderColor: "var(--border)", color: "var(--muted2)" }}>Comissão %</th>
+                  <th className="border-b p-2" style={{ borderColor: "var(--border)", color: "var(--muted2)" }}>Taxa fixa R$</th>
+                  <th className="border-b p-2" style={{ borderColor: "var(--border)" }}></th>
                 </tr>
               </thead>
               <tbody>
                 {draft.shopeeTiers.map((t, idx) => (
-                  <tr key={idx} className="border-b">
+                  <tr key={idx} className="border-b" style={{ borderColor: "var(--border)" }}>
                     <td className="p-2">
                       <input
                         value={t.min}
                         onChange={(e) => updateShopeeTier(idx, { min: num(e.target.value, 0) })}
-                        className="border rounded px-2 py-1 w-32"
+                        className="w-32 rounded border px-2 py-1"
+                        style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
                         inputMode="decimal"
                         placeholder="0,00"
                       />
@@ -542,7 +543,8 @@ export default function ConfiguracoesPage() {
                         onChange={(e) =>
                           updateShopeeTier(idx, { max: e.target.value === "" ? null : num(e.target.value, 0) })
                         }
-                        className="border rounded px-2 py-1 w-40"
+                        className="w-40 rounded border px-2 py-1"
+                        style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
                         inputMode="decimal"
                         placeholder="∞"
                       />
@@ -551,7 +553,8 @@ export default function ConfiguracoesPage() {
                       <input
                         value={t.commissionPercent}
                         onChange={(e) => updateShopeeTier(idx, { commissionPercent: num(e.target.value, 0) })}
-                        className="border rounded px-2 py-1 w-32"
+                        className="w-32 rounded border px-2 py-1"
+                        style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
                         inputMode="decimal"
                         placeholder="0,00"
                       />
@@ -560,13 +563,14 @@ export default function ConfiguracoesPage() {
                       <input
                         value={t.taxFixed}
                         onChange={(e) => updateShopeeTier(idx, { taxFixed: num(e.target.value, 0) })}
-                        className="border rounded px-2 py-1 w-32"
+                        className="w-32 rounded border px-2 py-1"
+                        style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
                         inputMode="decimal"
                         placeholder="0,00"
                       />
                     </td>
                     <td className="p-2">
-                      <button onClick={() => removeShopeeTier(idx)} className="px-2 py-1 border rounded hover:bg-gray-50">
+                      <button onClick={() => removeShopeeTier(idx)} className="rounded border px-2 py-1" style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}>
                         Remover
                       </button>
                     </td>
@@ -577,20 +581,20 @@ export default function ConfiguracoesPage() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            <button onClick={addShopeeTier} className="px-3 py-2 rounded-lg border text-sm hover:bg-gray-50">
+            <button onClick={addShopeeTier} className="px-3 py-2 rounded-lg border text-sm" style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}>
               + Adicionar faixa
             </button>
 
-            <div className="text-xs text-gray-500">
+            <div className="text-xs" style={{ color: "var(--muted)" }}>
               Imposto do canal: {draft.channels.shopee.mainTaxPercent}% (segue o regime)
             </div>
           </div>
         </div>
 
         {/* SITE */}
-        <div className="rounded-2xl border p-4 space-y-3">
+        <div className="rounded-2xl border p-4 space-y-3" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold">Site</h3>
+            <h3 className="font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>Site</h3>
             <label className="text-sm flex items-center gap-2">
               <input
                 type="checkbox"
@@ -627,9 +631,9 @@ export default function ConfiguracoesPage() {
         </div>
 
         {/* SITE MODIFIKA */}
-        <div className="rounded-2xl border p-4 space-y-3">
+        <div className="rounded-2xl border p-4 space-y-3" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold">Site Modifika</h3>
+            <h3 className="font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>Site Modifika</h3>
             <label className="text-sm flex items-center gap-2">
               <input
                 type="checkbox"
@@ -671,9 +675,9 @@ export default function ConfiguracoesPage() {
         </div>
 
         {/* OUTROS */}
-        <div className="rounded-2xl border p-4 space-y-3">
+        <div className="rounded-2xl border p-4 space-y-3" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold">Outros</h3>
+            <h3 className="font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>Outros</h3>
             <label className="text-sm flex items-center gap-2">
               <input
                 type="checkbox"
@@ -711,8 +715,8 @@ export default function ConfiguracoesPage() {
       </div>
 
       {/* Observação importante para o motor */}
-      <div className="rounded-2xl border p-4 text-sm text-gray-700">
-        <div className="font-semibold mb-1">Nota do motor de cálculo</div>
+      <div className="rounded-2xl border p-4 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted2)" }}>
+        <div className="mb-1 font-semibold" style={{ color: "var(--text)" }}>Nota do motor de cálculo</div>
         <ul className="list-disc pl-5 space-y-1">
           <li>O canal <b>Meli</b> usa a comissão do <b>plano</b> selecionado (Clássico/Premium).</li>
           <li>O canal <b>Shopee</b> usa a faixa que encaixa no preço (tiers).</li>
@@ -742,11 +746,12 @@ function Field(props: { label: string; value: number; onChange: (v: string) => v
 
   return (
     <div className="space-y-1">
-      <div className="text-sm font-medium">{label}</div>
+      <div className="text-sm font-medium" style={{ color: "var(--muted2)" }}>{label}</div>
       <input
         value={text}
         onChange={(e) => handleChange(e.target.value)}
-        className="border rounded-lg px-3 py-2 text-sm w-full"
+        className="border rounded-lg px-3 py-2 text-sm w-full outline-none"
+        style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
         inputMode="decimal"
         placeholder=",0"
       />
@@ -756,7 +761,10 @@ function Field(props: { label: string; value: number; onChange: (v: string) => v
 
 function Hint({ text }: { text: string }) {
   return (
-    <div className="rounded-lg border bg-gray-50 px-3 py-2 text-sm text-gray-700 flex items-center">
+    <div
+      className="flex items-center rounded-lg border px-3 py-2 text-sm"
+      style={{ background: "var(--surface-soft)", borderColor: "var(--border)", color: "var(--muted2)" }}
+    >
       {text}
     </div>
   );

@@ -1,49 +1,49 @@
 @import "tailwindcss";
 
-/* ---- Tema escuro (padrão) ---- */
-:root,
-[data-theme="dark"] {
-  --bg: #0a0a0a;
-  --text: #ffffff;
-  --muted: rgba(255,255,255,0.6);
-  --muted2: rgba(255,255,255,0.7);
-  --border: rgba(255,255,255,0.1);
-  --card-bg: rgba(255,255,255,0.05);
-  --footer-color: rgba(255,255,255,0.5);
-  --btn-bg: rgba(255,255,255,0.05);
-  --btn-ring: rgba(255,255,255,0.1);
-  --btn-text: rgba(255,255,255,0.85);
-  --btn-hover: rgba(255,255,255,0.1);
-  --signout-bg: rgba(255,255,255,0.08);
-  --signout-text: rgba(255,255,255,0.7);
-  --input-bg: rgba(0,0,0,0.6);
-  --input-text: #ffffff;
-}
+/* ---- Markup — tema "Fluxo Guiado" ---- */
+:root {
+  --bg: #f6f3ee;
+  --surface: #ffffff;
+  --surface-soft: #efe9df;
+  --text: #2c2418;
+  --muted: #85796a;
+  --muted2: #6b6153;
+  --border: rgba(41,33,23,0.10);
+  --border-strong: rgba(41,33,23,0.16);
 
-/* ---- Tema claro ---- */
-[data-theme="light"] {
-  --bg: #f4f4f5;
-  --text: #18181b;
-  --muted: rgba(24,24,27,0.55);
-  --muted2: rgba(24,24,27,0.65);
-  --border: rgba(24,24,27,0.12);
-  --card-bg: rgba(255,255,255,0.85);
-  --footer-color: rgba(24,24,27,0.4);
-  --btn-bg: rgba(24,24,27,0.06);
-  --btn-ring: rgba(24,24,27,0.14);
-  --btn-text: rgba(24,24,27,0.85);
-  --btn-hover: rgba(24,24,27,0.1);
-  --signout-bg: rgba(24,24,27,0.07);
-  --signout-text: rgba(24,24,27,0.65);
-  --input-bg: rgba(255,255,255,0.9);
-  --input-text: #18181b;
+  --accent: #5c8c6e;
+  --accent-hover: #4a7359;
+  --accent-ink: #f2f7f3;
+  --accent-soft: rgba(92,140,110,0.12);
+  --accent-soft-border: rgba(92,140,110,0.28);
+
+  --good: #4f9d6a;
+  --good-soft: rgba(79,157,106,0.12);
+  --warn: #c98a3a;
+  --warn-soft: rgba(201,138,58,0.12);
+  --crit: #c1594a;
+  --crit-soft: rgba(193,89,74,0.12);
+
+  --card-bg: #ffffff;
+  --footer-color: rgba(41,33,23,0.4);
+  --btn-bg: #ffffff;
+  --btn-ring: rgba(41,33,23,0.14);
+  --btn-text: #4a4030;
+  --btn-hover: #efe9df;
+  --signout-bg: #efe9df;
+  --signout-text: #6b6153;
+  --input-bg: #ffffff;
+  --input-text: #2c2418;
 }
 
 /* ---- Base ---- */
 body {
   background-color: var(--bg);
   color: var(--text);
-  transition: background-color 0.25s, color 0.25s;
+}
+
+input[type="checkbox"] {
+  accent-color: var(--accent);
 }
 
 /* ---- Utilitários de tema ---- */
@@ -56,9 +56,8 @@ body {
 }
 
 .theme-logo {
-  background: var(--btn-bg);
-  box-shadow: 0 0 0 1px var(--btn-ring);
-  color: var(--text);
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 
 .theme-btn {
@@ -94,5 +93,11 @@ body {
 }
 .theme-input:focus {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.5);
+  box-shadow: 0 0 0 2px var(--accent-soft-border);
 }
+
+.theme-accent-btn {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.theme-accent-btn:hover { background: var(--accent-hover); }

@@ -15,95 +15,109 @@ export function Header({
   const pathname = usePathname();
 
   const links = [
-    { name: "Precificação", href: "/precificacao" },
     { name: "Produtos", href: "/produtos" },
+    { name: "Precificação", href: "/precificacao" },
     { name: "Configurações", href: "/configuracoes" },
   ];
 
   if (!isLoggedIn) return null;
 
   return (
-    <header className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md px-4 py-3 relative z-50">
-      <div className="flex items-center justify-between">
-        {/* Logo */}
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 bg-emerald-500 rounded-lg flex items-center justify-center font-bold text-black">
+    <header className="relative z-50 flex items-center justify-between border-b px-1 pb-4" style={{ borderColor: "var(--border)" }}>
+      {/* Logo + nav desktop */}
+      <div className="flex items-center gap-9">
+        <div className="flex items-center gap-2.5">
+          <div
+            className="flex h-7 w-7 items-center justify-center rounded-md text-[13px] font-semibold"
+            style={{ background: "var(--accent)", color: "var(--accent-ink)", fontFamily: "var(--font-serif), serif" }}
+          >
             M
           </div>
-          <span className="font-semibold hidden sm:inline">Markup</span>
+          <span className="hidden text-[15px] font-semibold sm:inline" style={{ fontFamily: "var(--font-serif), serif" }}>
+            Markup
+          </span>
         </div>
 
-        {/* Menu Desktop */}
-        <nav className="hidden md:flex gap-4 items-center">
-          {links.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={`text-sm ${
-                pathname === link.href
-                  ? "text-white font-semibold"
-                  : "text-white/60 hover:text-white"
-              }`}
-            >
-              {link.name}
-            </Link>
-          ))}
+        <nav className="hidden md:flex items-center gap-7">
+          {links.map((link) => {
+            const active = pathname === link.href;
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="flex items-center gap-1.5 pb-[18px] -mb-[18px] text-[13.5px] transition-colors"
+                style={
+                  active
+                    ? { color: "var(--text)", fontWeight: 600, borderBottom: "2px solid var(--accent)" }
+                    : { color: "var(--muted)", fontWeight: 500, borderBottom: "2px solid transparent" }
+                }
+              >
+                {link.name}
+              </Link>
+            );
+          })}
         </nav>
-
-        {/* Lado direito Desktop: Minha Conta + Sair */}
-        <div className="hidden md:flex items-center gap-2">
-          <Link
-            href="/minha-conta"
-            className={`text-sm px-3 py-1.5 rounded-lg ${
-              pathname === "/minha-conta"
-                ? "text-white font-semibold bg-white/10"
-                : "text-white/60 hover:text-white hover:bg-white/5"
-            }`}
-          >
-            Minha conta
-          </Link>
-          <SignOutButton />
-        </div>
-
-        {/* Botão Hambúrguer Mobile */}
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="md:hidden p-2 text-white/60"
-          aria-label="Menu"
-        >
-          {isOpen ? "✕" : "☰"}
-        </button>
       </div>
 
-      {/* Dropdown Mobile */}
+      {/* Lado direito desktop: Minha conta + Sair */}
+      <div className="hidden md:flex items-center gap-3">
+        <Link
+          href="/minha-conta"
+          className="text-[13.5px] rounded-full px-3.5 py-1.5"
+          style={
+            pathname === "/minha-conta"
+              ? { color: "var(--text)", fontWeight: 600, background: "var(--surface-soft)" }
+              : { color: "var(--muted)", fontWeight: 500 }
+          }
+        >
+          Minha conta
+        </Link>
+        <SignOutButton />
+      </div>
+
+      {/* Botão hambúrguer mobile */}
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="md:hidden rounded-md p-2"
+        style={{ color: "var(--muted)" }}
+        aria-label="Menu"
+      >
+        {isOpen ? "✕" : "☰"}
+      </button>
+
+      {/* Dropdown mobile */}
       {isOpen && (
-        <div className="md:hidden absolute top-full left-0 right-0 mt-2 bg-neutral-900 border border-white/10 rounded-xl p-4 flex flex-col gap-4 shadow-xl z-50">
+        <div
+          className="md:hidden absolute top-full left-0 right-0 mt-2 flex flex-col gap-4 rounded-xl border p-4 shadow-lg z-50"
+          style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+        >
           {links.map((link) => (
             <Link
               key={link.href}
               href={link.href}
               onClick={() => setIsOpen(false)}
-              className={`text-base font-medium ${
-                pathname === link.href ? "text-white" : "text-white/60"
-              }`}
+              className="text-base"
+              style={pathname === link.href ? { color: "var(--text)", fontWeight: 600 } : { color: "var(--muted)", fontWeight: 500 }}
             >
               {link.name}
             </Link>
           ))}
 
-          <hr className="border-white/10" />
+          <hr style={{ borderColor: "var(--border)" }} />
 
           <Link
             href="/minha-conta"
             onClick={() => setIsOpen(false)}
-            className="text-base font-medium text-white/60 hover:text-white"
+            className="text-base font-medium"
+            style={{ color: "var(--muted)" }}
           >
             Minha conta
           </Link>
 
-          <div className="text-xs text-white/40">Logado como: {userName}</div>
+          <div className="text-xs" style={{ color: "var(--muted)" }}>
+            Logado como: {userName}
+          </div>
 
-          {/* Botão Sair no mobile */}
           <SignOutButton />
         </div>
       )}

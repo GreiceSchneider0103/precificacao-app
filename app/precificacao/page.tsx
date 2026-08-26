@@ -54,7 +54,7 @@ const DRAFT_KEY = "markup_precificacao_draft_v1";
 
 function normalizeSku(s: string) { return (s || "").trim().toUpperCase(); }
 
-const CHANNEL_LABEL: Record<string, string> = { magalu: "Magalu", meli: "Mercado Livre", shopee: "Shopee", site: "Site", site_modifika: "Site Modifika", amazon: "Amazon", loja_fisica: "Loja Física" };
+const CHANNEL_LABEL: Record<string, string> = { magalu: "Magalu", meli: "Mercado Livre", shopee: "Shopee", site: "Site", site_modifika: "Site Modifika", outros: "Outros", amazon: "Amazon", loja_fisica: "Loja Física" };
 function channelLabel(key: string) { return CHANNEL_LABEL[key] || key; }
 
 // Wrapper fino: delega a convergência de faixa da Shopee para lib/pricing.ts
@@ -101,7 +101,33 @@ function mapRuleSetToSettings(rs: RawRuleSet): Settings {
 }
 
 function InfoTip({ text }: { text: string }) {
-  return <span title={text} className="ml-1 inline-grid h-4 w-4 place-items-center rounded-full bg-white/5 text-[11px] text-white/70 ring-1 ring-white/10 cursor-help select-none" aria-label={text}>ℹ</span>;
+  return (
+    <span
+      title={text}
+      className="ml-1 inline-grid h-4 w-4 place-items-center rounded-full text-[11px] cursor-help select-none"
+      style={{ background: "var(--surface-soft)", color: "var(--muted)" }}
+      aria-label={text}
+    >
+      ⓘ
+    </span>
+  );
+}
+
+function Step({ n, label, children }: { n: number; label: string; children: ReactNode }) {
+  return (
+    <div className="flex gap-3.5">
+      <div
+        className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11.5px] font-semibold"
+        style={{ background: "var(--accent)", color: "var(--accent-ink)" }}
+      >
+        {n}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="mb-2.5 text-[12px] font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>{label}</div>
+        {children}
+      </div>
+    </div>
+  );
 }
 
 export default function PrecificacaoPage() {
@@ -339,233 +365,300 @@ export default function PrecificacaoPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <h1 className="text-2xl font-semibold">Precificação</h1>
-        <p className="mt-1 text-sm text-white/60">Calcule o <b>Preço POR</b> para atingir a margem desejada, com impostos, taxas e créditos.</p>
-      </section>
+    <div className="mx-auto max-w-2xl space-y-7">
+      <div>
+        <h1 className="text-[27px] font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>Qual o preço ideal?</h1>
+        <p className="mt-1.5 text-sm" style={{ color: "var(--muted)" }}>Escolha o produto e o canal — o resto o Markup calcula para você.</p>
+      </div>
 
       {!settings && (
-        <section className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-6 text-sm text-amber-100">
+        <div className="rounded-2xl border p-5 text-sm" style={{ borderColor: "var(--warn-soft)", background: "var(--warn-soft)", color: "var(--warn)" }}>
           Ainda não encontrei Configurações salvas. Vá em <b>Configurações</b>, salve e volte aqui.
-        </section>
+        </div>
       )}
 
-      <section className="relative overflow-visible rounded-2xl border border-white/10 bg-white/5 p-6">
-        <div className="relative overflow-visible isolate grid gap-4 md:grid-cols-2">
-          {/* ESQUERDA */}
-          <div className="grid gap-3 content-start">
-
-            {/* ✅ SELECT DE CANAL — sempre visível */}
-            <label className="grid gap-1">
-              <span className="text-xs text-white/60">Canal de venda<InfoTip text="Selecione o marketplace para as taxas corretas." /></span>
-              <select value={effectiveChannel} onChange={(e) => { setChannel(e.target.value as ChannelKey); setMargemDirty(false); }} className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60">
-                {availableChannels.map((k) => <option key={k} value={k}>{channelLabel(k)}</option>)}
-              </select>
-            </label>
-
-            {/* BUSCA */}
-            <div className="grid gap-1 relative">
-              <label className="grid gap-1">
-                <span className="text-xs text-white/60">Buscar produto cadastrado<InfoTip text="Se não encontrar, preencha os campos manuais abaixo." /></span>
-                <input value={query} onChange={(e) => { setQuery(e.target.value); if (!e.target.value.trim()) setSelectedSku(null); }} placeholder="Digite SKU ou nome..." className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60 w-full" />
-              </label>
-              {!!query.trim() && !selectedSku && (
-                <div className="absolute top-[calc(100%+6px)] left-0 right-0 z-50 rounded-xl border border-white/10 bg-neutral-900/95 p-2 shadow-2xl backdrop-blur">
-                  <p className="px-2 pb-2 text-[10px] uppercase font-bold text-white/40">Sugestões</p>
-                  <div className="grid gap-2 max-h-60 overflow-y-auto">
-                    {filteredProducts.length ? filteredProducts.map((p) => (
-                      <button key={p.sku} type="button" onClick={() => { setSelectedSku(p.sku); setQuery(p.name); }} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-neutral-950/40 px-3 py-2 text-left hover:bg-neutral-950/60">
-                        <div><p className="text-sm font-semibold text-white">{p.name}</p><p className="text-xs text-white/60">SKU: {p.sku} • CMV: R$ {fmtPt(p.cmv)}</p></div>
-                        <span className="text-[10px] bg-white/5 px-2 py-1 rounded-md text-white/40">Selecionar</span>
-                      </button>
-                    )) : <div className="px-3 py-3 text-sm text-white/60">Nenhum produto encontrado.</div>}
-                  </div>
+      {/* PASSO 1 — PRODUTO */}
+      <Step n={1} label="Produto">
+        <div className="relative">
+          <div className="flex items-center gap-2.5 rounded-xl border px-3.5 py-3" style={{ background: "var(--surface)", borderColor: picked ? "var(--accent-soft-border)" : "var(--border)" }}>
+            <svg width="16" height="16" viewBox="0 0 20 20" style={{ stroke: "var(--muted)", flexShrink: 0 }} fill="none" strokeWidth="1.6" strokeLinecap="round">
+              <circle cx="8.6" cy="8.6" r="5.4" /><path d="M16.8 16.8l-3.9-3.9" />
+            </svg>
+            {picked ? (
+              <>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[14px] font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>{picked.name}</p>
+                  <p className="text-[12px]" style={{ color: "var(--muted)" }}>SKU: {picked.sku} · CMV R$ {fmtPt(picked.cmv)}</p>
                 </div>
-              )}
-            </div>
-
-            {/* ✅ CMV MANUAL — visível quando nenhum produto selecionado */}
-            {!picked && (
-              <div className="rounded-xl border border-white/10 bg-white/5 p-4 grid gap-3">
-                <p className="text-xs font-semibold text-white/60 uppercase tracking-wide">Produto manual<InfoTip text="O CMV é obrigatório para o cálculo." /></p>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <label className="grid gap-1">
-                    <span className="text-xs text-white/60">Markup desejado (DE)<InfoTip text="Multiplicador do CMV para o preço DE. Padrão: 4,3" /></span>
-                    <input value={manualMarkup} onChange={(e) => setManualMarkup(e.target.value)} inputMode="decimal" placeholder="ex: 4,3" className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60" />
-                  </label>
-                  <label className="grid gap-1">
-                    <span className="text-xs text-white/60">CMV (R$) <span className="text-rose-400">*</span></span>
-                    <input value={manualCmv} onChange={(e) => setManualCmv(e.target.value)} inputMode="decimal" placeholder="ex: 189,90" className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-emerald-500/60" />
-                  </label>
-                </div>
-                {parseNumberPt(manualCmv) > 0 && <p className="text-xs text-emerald-400">CMV: R$ {fmtPt(parseNumberPt(manualCmv))} — pronto para calcular.</p>}
-              </div>
+                <button type="button" onClick={() => { setSelectedSku(null); setQuery(""); }} className="shrink-0 text-[12px] font-semibold" style={{ color: "var(--accent)" }}>trocar</button>
+              </>
+            ) : (
+              <input
+                value={query}
+                onChange={(e) => { setQuery(e.target.value); if (!e.target.value.trim()) setSelectedSku(null); }}
+                placeholder="Buscar produto cadastrado por SKU ou nome..."
+                className="w-full bg-transparent text-sm outline-none"
+                style={{ color: "var(--text)" }}
+              />
             )}
-
-            {picked && (
-              <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3">
-                <div><p className="text-sm font-semibold">{picked.name}</p><p className="text-xs text-white/60">SKU: {picked.sku} • CMV: R$ {fmtPt(picked.cmv)}</p></div>
-                <button type="button" onClick={() => { setSelectedSku(null); setQuery(""); }} className="rounded-lg bg-white/5 px-3 py-1.5 text-xs text-white/70 ring-1 ring-white/10 hover:bg-white/10">Trocar</button>
-              </div>
-            )}
-
-            <label className="grid gap-1">
-              <span className="text-xs text-white/60">Regime tributário</span>
-              <select value={regimeOverride} onChange={(e) => setRegimeOverride(e.target.value as "default" | Regime)} className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60">
-                <option value="default">Usar Configurações</option>
-                <option value="simples">Simples Nacional</option>
-                <option value="normal">Regime normal</option>
-              </select>
-            </label>
-
-            {/* ✅ MELI: Clássico / Premium */}
-            {effectiveChannel === "meli" && (
-              <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                <p className="text-xs text-white/60 font-semibold mb-2">Tipo de anúncio — Mercado Livre</p>
-                <div className="flex gap-2">
-                  {(["classic", "premium"] as const).map((m) => (
-                    <button key={m} type="button" onClick={() => setMeliMode(m)} className={meliMode === m ? "rounded-xl bg-white/15 px-3 py-2 text-xs font-semibold ring-1 ring-white/10" : "rounded-xl bg-white/5 px-3 py-2 text-xs font-semibold text-white/70 ring-1 ring-white/10 hover:bg-white/10"}>
-                      {m === "classic" ? "Clássico" : "Premium"}
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-2 text-[11px] text-white/50">Comissões puxadas das Configurações.</p>
-              </div>
-            )}
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="grid gap-1">
-                <span className="text-xs text-white/60">Frete (R$)<InfoTip text="Frete fixo estimado." /></span>
-                <input value={frete} onChange={(e) => setFrete(e.target.value)} inputMode="decimal" className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60" />
-              </label>
-              <label className="grid gap-1">
-                <span className="text-xs text-white/60">Margem alvo (%)<InfoTip text="Ao trocar canal, volta para o padrão. Se digitar, fica travada." /></span>
-                <input value={margemEfetiva} onChange={(e) => { setMargem(e.target.value); setMargemDirty(true); }} inputMode="decimal" className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60" />
-              </label>
-            </div>
-
-            <Accordion title="Custos, Ads, Desconto e Rebate" subtitle="Ajuste somente quando necessário.">
-              {(["fixed", "percent"] as MoneyMode[]).length > 0 && (
-                <div className="grid gap-3">
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                      <div className="flex items-center justify-between"><p className="text-sm font-semibold">Custos operacionais</p><ModeToggle value={operMode} onChange={setOperMode} /></div>
-                      <input value={operValue} onChange={(e) => setOperValue(e.target.value)} inputMode="decimal" placeholder={operMode === "percent" ? "ex: 2,5" : "ex: 12,00"} className="mt-3 w-full rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none" />
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                      <p className="text-sm font-semibold mb-3">Taxa cartão (%)</p>
-                      <input value={cardFeeValue} onChange={(e) => setCardFeeValue(e.target.value)} inputMode="decimal" placeholder="Usa padrão do canal" className="w-full rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none" />
-                    </div>
-                  </div>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                      <div className="flex items-center justify-between"><p className="text-sm font-semibold">Ads</p><ModeToggle value={adsMode} onChange={setAdsMode} /></div>
-                      <input value={adsValue} onChange={(e) => setAdsValue(e.target.value)} inputMode="decimal" placeholder={adsMode === "percent" ? "ex: 3" : "ex: 25,00"} className="mt-3 w-full rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none" />
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                      <div className="flex items-center justify-between"><p className="text-sm font-semibold">Influencer</p><ModeToggle value={influencerMode} onChange={setInfluencerMode} percentFirst /></div>
-                      <input value={influencerValue} onChange={(e) => setInfluencerValue(e.target.value)} inputMode="decimal" placeholder={influencerMode === "percent" ? "ex: 5" : "ex: 50,00"} className="mt-3 w-full rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none" />
-                    </div>
-                  </div>
-                  {/* Desconto + Rebate */}
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                      <p className="text-sm font-semibold mb-3">Desconto/Cupom</p>
-                      <ModeToggle value={descontoMode} onChange={setDescontoMode} percentFirst />
-                      <input value={descontoValue} onChange={(e) => setDescontoValue(e.target.value)} inputMode="decimal" className="mt-2 w-full rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none" />
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                      <p className="text-sm font-semibold mb-3">Rebate</p>
-                      <ModeToggle value={rebateMode} onChange={setRebateMode} percentFirst />
-                      <input value={rebateValue} onChange={(e) => setRebateValue(e.target.value)} inputMode="decimal" className="mt-2 w-full rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none" />
-                    </div>
-                  </div>
-
-                  <div className="mt-2">
-                    <button type="button" onClick={handleApplyCustos} className="w-full rounded-xl bg-blue-600/20 py-3 text-sm font-semibold text-blue-100 ring-1 ring-blue-500/30 hover:bg-blue-600/30 transition">Aplicar mudanças</button>
-                  </div>
-                </div>
-              )}
-            </Accordion>
-
-            <Accordion title="Ajustes rápidos" subtitle="Deixe vazio para usar o padrão.">
-              <div className="rounded-xl border border-white/10 bg-white/5 p-4 grid gap-3 md:grid-cols-2">
-                <div className="grid gap-2">
-                  <SmallInput label="Comissão (%)" value={commissionOverride} onChange={setCommissionOverride} />
-                  <SmallInput label="Imposto (%)" value={taxOverride} onChange={setTaxOverride} />
-                  <SmallInput label="Taxa fixa (R$)" value={fixedOverride} onChange={setFixedOverride} />
-                </div>
-                <div className="grid gap-2">
-                  <SmallInput label="Crédito frete (%)" value={creditFreteOverride} onChange={setCreditFreteOverride} />
-                  <SmallInput label="Crédito comissão (%)" value={creditComissaoOverride} onChange={setCreditComissaoOverride} />
-                  <SmallInput label="Crédito incentivo (%)" value={incentiveCreditOverride} onChange={setIncentiveCreditOverride} />
-                </div>
-                <div className="md:col-span-2 flex justify-end">
-                  <button type="button" onClick={handleApplyAjustes} className="mt-2 rounded-xl bg-blue-600/20 px-6 py-3 text-sm font-semibold text-blue-100 ring-1 ring-blue-500/30 hover:bg-blue-600/30 transition">Aplicar ajustes</button>
-                </div>
-              </div>
-            </Accordion>
           </div>
 
-          {/* DIREITA */}
-          <div className="relative z-0 rounded-2xl border border-white/10 bg-white/5 p-5">
-            <p className="text-xs font-medium tracking-wide text-white/60">RESULTADO</p>
-            {!result ? (
-              <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
-                {!settings ? "Configure as Configurações e salve antes de calcular." : (!effectiveCmv || effectiveCmv <= 0) ? "Informe o CMV do produto (manual ou cadastrado)." : "Informe um CMV válido e verifique se Configurações estão salvas."}
+          {!!query.trim() && !selectedSku && (
+            <div className="absolute top-[calc(100%+6px)] left-0 right-0 z-50 rounded-xl border p-2 shadow-lg" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+              <p className="px-2 pb-2 text-[10px] font-bold uppercase" style={{ color: "var(--muted)" }}>Sugestões</p>
+              <div className="grid max-h-60 gap-1.5 overflow-y-auto">
+                {filteredProducts.length ? filteredProducts.map((p) => (
+                  <button
+                    key={p.sku}
+                    type="button"
+                    onClick={() => { setSelectedSku(p.sku); setQuery(p.name); }}
+                    className="flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-left"
+                    style={{ background: "var(--surface-soft)" }}
+                  >
+                    <div><p className="text-sm font-semibold">{p.name}</p><p className="text-xs" style={{ color: "var(--muted)" }}>SKU: {p.sku} · CMV R$ {fmtPt(p.cmv)}</p></div>
+                    <span className="rounded-md px-2 py-1 text-[10px]" style={{ background: "var(--surface)", color: "var(--muted)" }}>Selecionar</span>
+                  </button>
+                )) : <div className="px-3 py-3 text-sm" style={{ color: "var(--muted)" }}>Nenhum produto encontrado.</div>}
               </div>
-            ) : (
-              <>
-                {alerts.length > 0 && <div className="mt-4 space-y-2">{alerts.map((a, i) => <div key={i} className={a.type === "bad" ? "rounded-xl border border-rose-500/25 bg-rose-500/10 px-4 py-2 text-sm text-rose-100" : "rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-2 text-sm text-amber-100"}>{a.text}</div>)}</div>}
-                <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-5">
-                  <p className="text-xs text-white/60">Preço DE (CMV × {effectiveMarkup.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 2 })})</p>
-                  <p className="mt-1 text-2xl font-semibold">R$ {fmtPt(result.precoDE)}</p>
-                  <div className="mt-4 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs text-white/60">Preço POR (sugerido)</p>
-                      <p className="mt-1 text-3xl font-semibold">R$ {fmtPt(result.POR_sugerido)}</p>
-                      <p className="mt-2 text-xs text-white/60">Margem: <b>{result.breakdown.margemPct.toFixed(2)}%</b></p>
-                    </div>
-                    <button type="button" onClick={copyPorToClipboard} className="h-11 shrink-0 rounded-xl bg-white/5 px-4 text-sm font-semibold ring-1 ring-white/10 hover:bg-white/10">Copiar POR</button>
-                  </div>
-                  <button type="button" onClick={() => { resetForNewPricing(); showToast("ok", "Pronto para nova precificação."); }} className="mt-4 w-full rounded-xl bg-blue-500/12 px-4 py-3 text-sm font-semibold text-blue-100 ring-1 ring-blue-500/20 hover:bg-blue-500/16">Nova precificação</button>
+            </div>
+          )}
+
+          {!picked && (
+            <div className="mt-3 grid gap-3 rounded-xl border p-4 md:grid-cols-2" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+              <label className="grid gap-1">
+                <span className="text-xs" style={{ color: "var(--muted)" }}>Markup desejado (DE)<InfoTip text="Multiplicador do CMV para o preço DE. Padrão: 4,3" /></span>
+                <input value={manualMarkup} onChange={(e) => setManualMarkup(e.target.value)} inputMode="decimal" placeholder="ex: 4,3" className="rounded-lg border px-3.5 py-2.5 text-sm outline-none" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }} />
+              </label>
+              <label className="grid gap-1">
+                <span className="text-xs" style={{ color: "var(--muted)" }}>CMV (R$) <span style={{ color: "var(--crit)" }}>*</span></span>
+                <input value={manualCmv} onChange={(e) => setManualCmv(e.target.value)} inputMode="decimal" placeholder="ex: 189,90" className="rounded-lg border px-3.5 py-2.5 text-sm outline-none" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }} />
+              </label>
+              {parseNumberPt(manualCmv) > 0 && <p className="text-xs md:col-span-2" style={{ color: "var(--good)" }}>CMV: R$ {fmtPt(parseNumberPt(manualCmv))} — pronto para calcular.</p>}
+            </div>
+          )}
+        </div>
+      </Step>
+
+      {/* PASSO 2 — CANAL */}
+      <Step n={2} label="Canal de venda">
+        <div className="flex flex-wrap gap-2">
+          {availableChannels.map((k) => {
+            const active = effectiveChannel === k;
+            return (
+              <button
+                key={k}
+                type="button"
+                onClick={() => { setChannel(k); setMargemDirty(false); }}
+                className="rounded-full px-4 py-2 text-[13px] font-semibold"
+                style={active ? { background: "var(--accent)", color: "var(--accent-ink)" } : { background: "var(--surface)", border: "1px solid var(--border)", color: "var(--muted)" }}
+              >
+                {channelLabel(k)}
+              </button>
+            );
+          })}
+        </div>
+
+        {effectiveChannel === "meli" && (
+          <div className="mt-3 flex items-center gap-2.5">
+            <span className="text-xs" style={{ color: "var(--muted)" }}>Anúncio:</span>
+            {(["classic", "premium"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMeliMode(m)}
+                className="rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold"
+                style={meliMode === m ? { background: "var(--surface-soft)", color: "var(--text)" } : { color: "var(--muted)" }}
+              >
+                {m === "classic" ? "Clássico" : "Premium"}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <label className="mt-3 grid gap-1">
+          <span className="text-xs" style={{ color: "var(--muted)" }}>Regime tributário</span>
+          <select
+            value={regimeOverride}
+            onChange={(e) => setRegimeOverride(e.target.value as "default" | Regime)}
+            className="rounded-lg border px-3.5 py-2.5 text-sm outline-none"
+            style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
+          >
+            <option value="default">Usar Configurações</option>
+            <option value="simples">Simples Nacional</option>
+            <option value="normal">Regime normal</option>
+          </select>
+        </label>
+      </Step>
+
+      {/* PASSO 3 — CUSTOS E MARGEM */}
+      <Step n={3} label="Custos e margem">
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="grid gap-1">
+            <span className="text-xs" style={{ color: "var(--muted)" }}>Frete (R$)<InfoTip text="Frete fixo estimado." /></span>
+            <input value={frete} onChange={(e) => setFrete(e.target.value)} inputMode="decimal" className="rounded-lg border px-3.5 py-2.5 text-sm outline-none" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }} />
+          </label>
+          <label className="grid gap-1">
+            <span className="text-xs" style={{ color: "var(--muted)" }}>Margem alvo (%)<InfoTip text="Ao trocar canal, volta para o padrão. Se digitar, fica travada." /></span>
+            <input value={margemEfetiva} onChange={(e) => { setMargem(e.target.value); setMargemDirty(true); }} inputMode="decimal" className="rounded-lg border px-3.5 py-2.5 text-sm outline-none" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }} />
+          </label>
+        </div>
+
+        <div className="mt-3 grid gap-2.5">
+          <Accordion title="Custos, ads, desconto e rebate" subtitle="Ajuste somente quando necessário.">
+            <div className="grid gap-3">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-xl border p-3.5" style={{ borderColor: "var(--border)" }}>
+                  <div className="flex items-center justify-between"><p className="text-[13px] font-semibold">Custos operacionais</p><ModeToggle value={operMode} onChange={setOperMode} /></div>
+                  <input value={operValue} onChange={(e) => setOperValue(e.target.value)} inputMode="decimal" placeholder={operMode === "percent" ? "ex: 2,5" : "ex: 12,00"} className="mt-2.5 w-full rounded-lg border px-3 py-2 text-sm outline-none" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }} />
                 </div>
-                <div className="mt-4 rounded-2xl border border-blue-500/20 bg-blue-500/10 p-5">
-                  <p className="text-xs font-semibold text-blue-100">PARA ATINGIR {parseNumberPt(margemEfetiva).toFixed(2)}% DE MARGEM</p>
-                  <div className="mt-3 grid gap-3 md:grid-cols-2">
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4"><p className="text-xs text-white/60">POR sugerido</p><p className="mt-1 text-xl font-semibold">R$ {fmtPt(result.POR_sugerido)}</p></div>
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4"><p className="text-xs text-white/60">Desconto sugerido sobre DE</p><p className="mt-1 text-xl font-semibold">{result.descontoNecessarioPct.toFixed(2)}% <span className="text-sm text-white/60">(R$ {fmtPt(result.descontoNecessarioR$)})</span></p></div>
-                  </div>
+                <div className="rounded-xl border p-3.5" style={{ borderColor: "var(--border)" }}>
+                  <p className="mb-2.5 text-[13px] font-semibold">Taxa cartão (%)</p>
+                  <input value={cardFeeValue} onChange={(e) => setCardFeeValue(e.target.value)} inputMode="decimal" placeholder="Usa padrão do canal" className="w-full rounded-lg border px-3 py-2 text-sm outline-none" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }} />
                 </div>
-                <div className="mt-4 space-y-2 text-sm">
-                  {result.breakdown.comissao >= 0.005 && <Row label={`${effectiveChannel === 'site_modifika' ? 'Taxa Marketplace' : 'Comissão'} (${result.channelUsed.commissionPercent.toFixed(2)}%)`} value={`R$ ${fmtPt(result.breakdown.comissao)}`} />}
-                  {result.breakdown.imposto >= 0.005 && <Row label={`Imposto (${result.channelUsed.mainTaxPercent.toFixed(2)}%)`} value={`R$ ${fmtPt(result.breakdown.imposto)}`} />}
-                  {result.breakdown.pisCofins >= 0.005 && <Row label={`PIS/COFINS ${result.regimeUsed === "normal" ? `(${(result.channelUsed.pisCofinsPercent ?? 9.25).toString().replace(".", ",")}%)` : "(não aplica)"}`} value={`R$ ${fmtPt(result.breakdown.pisCofins)}`} />}
-                  {result.breakdown.taxaFixa >= 0.005 && <Row label="Taxa fixa canal" value={`R$ ${fmtPt(result.breakdown.taxaFixa)}`} />}
-                  <div className="my-3 h-px bg-white/10" />
-                  <Row label="Frete" value={`R$ ${fmtPt(result.breakdown.frete)}`} />
-                  <Row label="CMV" value={`R$ ${fmtPt(result.breakdown.cmv)}`} />
-                  {result.breakdown.operacionais >= 0.005 && <Row label="Custos operacionais" value={`R$ ${fmtPt(result.breakdown.operacionais)}`} />}
-                  {result.breakdown.ads >= 0.005 && <Row label="Ads" value={`R$ ${fmtPt(result.breakdown.ads)}`} />}
-                  {result.breakdown.taxaCartao >= 0.005 && <Row label="Taxa de Cartão" value={`R$ ${fmtPt(result.breakdown.taxaCartao)}`} />}
-                  {result.breakdown.influencer >= 0.005 && <Row label="Influencer" value={`R$ ${fmtPt(result.breakdown.influencer)}`} />}
-                  <div className="my-3 h-px bg-white/10" />
-                  {result.breakdown.creditoFrete >= 0.005 && <Row label="Crédito de frete" value={`R$ ${fmtPt(result.breakdown.creditoFrete)}`} />}
-                  {result.breakdown.creditoComissao >= 0.005 && <Row label="Crédito de comissão" value={`R$ ${fmtPt(result.breakdown.creditoComissao)}`} />}
-                  {result.breakdown.creditoIncentivo >= 0.005 && <Row label="Crédito Incentivo" value={`R$ ${fmtPt(result.breakdown.creditoIncentivo)}`} />}
-                  {result.breakdown.rebate !== 0 && <Row label="Rebate" value={`R$ ${fmtPt(result.breakdown.rebate)}`} />}
-                  <div className="my-3 h-px bg-white/10" />
-                  <Row label="Receita líquida" value={`R$ ${fmtPt(result.breakdown.receitaLiquida)}`} strong />
-                  <Row label="Margem de contribuição" value={`R$ ${fmtPt(result.breakdown.margemContrib)}`} strong />
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-xl border p-3.5" style={{ borderColor: "var(--border)" }}>
+                  <div className="flex items-center justify-between"><p className="text-[13px] font-semibold">Ads</p><ModeToggle value={adsMode} onChange={setAdsMode} /></div>
+                  <input value={adsValue} onChange={(e) => setAdsValue(e.target.value)} inputMode="decimal" placeholder={adsMode === "percent" ? "ex: 3" : "ex: 25,00"} className="mt-2.5 w-full rounded-lg border px-3 py-2 text-sm outline-none" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }} />
                 </div>
-              </>
-            )}
+                <div className="rounded-xl border p-3.5" style={{ borderColor: "var(--border)" }}>
+                  <div className="flex items-center justify-between"><p className="text-[13px] font-semibold">Influencer</p><ModeToggle value={influencerMode} onChange={setInfluencerMode} percentFirst /></div>
+                  <input value={influencerValue} onChange={(e) => setInfluencerValue(e.target.value)} inputMode="decimal" placeholder={influencerMode === "percent" ? "ex: 5" : "ex: 50,00"} className="mt-2.5 w-full rounded-lg border px-3 py-2 text-sm outline-none" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }} />
+                </div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-xl border p-3.5" style={{ borderColor: "var(--border)" }}>
+                  <p className="mb-2.5 text-[13px] font-semibold">Desconto/Cupom</p>
+                  <ModeToggle value={descontoMode} onChange={setDescontoMode} percentFirst />
+                  <input value={descontoValue} onChange={(e) => setDescontoValue(e.target.value)} inputMode="decimal" className="mt-2 w-full rounded-lg border px-3 py-2 text-sm outline-none" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }} />
+                </div>
+                <div className="rounded-xl border p-3.5" style={{ borderColor: "var(--border)" }}>
+                  <p className="mb-2.5 text-[13px] font-semibold">Rebate</p>
+                  <ModeToggle value={rebateMode} onChange={setRebateMode} percentFirst />
+                  <input value={rebateValue} onChange={(e) => setRebateValue(e.target.value)} inputMode="decimal" className="mt-2 w-full rounded-lg border px-3 py-2 text-sm outline-none" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }} />
+                </div>
+              </div>
+              <button type="button" onClick={handleApplyCustos} className="w-full rounded-full py-2.5 text-sm font-semibold" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>Aplicar mudanças</button>
+            </div>
+          </Accordion>
+
+          <Accordion title="Ajustes rápidos" subtitle="Deixe vazio para usar o padrão.">
+            <div className="grid gap-3 md:grid-cols-2">
+              <SmallInput label="Comissão (%)" value={commissionOverride} onChange={setCommissionOverride} />
+              <SmallInput label="Imposto (%)" value={taxOverride} onChange={setTaxOverride} />
+              <SmallInput label="Taxa fixa (R$)" value={fixedOverride} onChange={setFixedOverride} />
+              <SmallInput label="Crédito frete (%)" value={creditFreteOverride} onChange={setCreditFreteOverride} />
+              <SmallInput label="Crédito comissão (%)" value={creditComissaoOverride} onChange={setCreditComissaoOverride} />
+              <SmallInput label="Crédito incentivo (%)" value={incentiveCreditOverride} onChange={setIncentiveCreditOverride} />
+              <div className="md:col-span-2">
+                <button type="button" onClick={handleApplyAjustes} className="w-full rounded-full py-2.5 text-sm font-semibold" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>Aplicar ajustes</button>
+              </div>
+            </div>
+          </Accordion>
+        </div>
+      </Step>
+
+      {/* RESULTADO */}
+      {!result ? (
+        <div className="rounded-2xl border p-5 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }}>
+          {!settings ? "Configure as Configurações e salve antes de calcular." : (!effectiveCmv || effectiveCmv <= 0) ? "Informe o CMV do produto (manual ou cadastrado)." : "Informe um CMV válido e verifique se Configurações estão salvas."}
+        </div>
+      ) : (
+        <>
+          {alerts.length > 0 && (
+            <div className="space-y-2">
+              {alerts.map((a, i) => (
+                <div
+                  key={i}
+                  className="rounded-xl border px-4 py-2.5 text-sm"
+                  style={a.type === "bad" ? { borderColor: "var(--crit-soft)", background: "var(--crit-soft)", color: "var(--crit)" } : { borderColor: "var(--warn-soft)", background: "var(--warn-soft)", color: "var(--warn)" }}
+                >
+                  {a.text}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="rounded-[22px] border p-6 shadow-sm sm:p-7" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="text-[13px]" style={{ color: "var(--muted)" }}>Vender por</p>
+                <p className="text-[42px] font-semibold leading-none" style={{ fontFamily: "var(--font-serif), serif" }}>R$ {fmtPt(result.POR_sugerido)}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[13px] line-through" style={{ color: "var(--muted)" }}>De R$ {fmtPt(result.precoDE)}</p>
+                <span className="mt-1 inline-block rounded-full px-3 py-1 text-[12.5px] font-semibold" style={{ background: "var(--good-soft)", color: "var(--good)" }}>
+                  {result.breakdown.margemPct.toFixed(2)}% de margem
+                </span>
+              </div>
+            </div>
+
+            <div className="my-5 h-px" style={{ background: "var(--border)" }} />
+
+            <div className="rounded-xl p-4 text-sm" style={{ background: "var(--accent-soft)" }}>
+              <p className="text-[11.5px] font-semibold uppercase tracking-wide" style={{ color: "var(--accent)" }}>
+                Para atingir {parseNumberPt(margemEfetiva).toFixed(2)}% de margem
+              </p>
+              <p className="mt-1.5" style={{ color: "var(--text)" }}>
+                Desconto sugerido sobre o preço DE: <b>{result.descontoNecessarioPct.toFixed(2)}%</b> (R$ {fmtPt(result.descontoNecessarioR$)})
+              </p>
+            </div>
+
+            <div className="mt-5 grid gap-x-8 gap-y-2 text-[13px] sm:grid-cols-2">
+              {result.breakdown.comissao >= 0.005 && <Row label={`${effectiveChannel === 'site_modifika' ? 'Taxa Marketplace' : 'Comissão'} (${result.channelUsed.commissionPercent.toFixed(2)}%)`} value={`R$ ${fmtPt(result.breakdown.comissao)}`} />}
+              {result.breakdown.imposto >= 0.005 && <Row label={`Imposto (${result.channelUsed.mainTaxPercent.toFixed(2)}%)`} value={`R$ ${fmtPt(result.breakdown.imposto)}`} />}
+              {result.breakdown.pisCofins >= 0.005 && <Row label={`PIS/COFINS ${result.regimeUsed === "normal" ? `(${(result.channelUsed.pisCofinsPercent ?? 9.25).toString().replace(".", ",")}%)` : "(não aplica)"}`} value={`R$ ${fmtPt(result.breakdown.pisCofins)}`} />}
+              {result.breakdown.taxaFixa >= 0.005 && <Row label="Taxa fixa canal" value={`R$ ${fmtPt(result.breakdown.taxaFixa)}`} />}
+              <Row label="Frete" value={`R$ ${fmtPt(result.breakdown.frete)}`} />
+              <Row label="CMV" value={`R$ ${fmtPt(result.breakdown.cmv)}`} />
+              {result.breakdown.operacionais >= 0.005 && <Row label="Custos operacionais" value={`R$ ${fmtPt(result.breakdown.operacionais)}`} />}
+              {result.breakdown.ads >= 0.005 && <Row label="Ads" value={`R$ ${fmtPt(result.breakdown.ads)}`} />}
+              {result.breakdown.taxaCartao >= 0.005 && <Row label="Taxa de Cartão" value={`R$ ${fmtPt(result.breakdown.taxaCartao)}`} />}
+              {result.breakdown.influencer >= 0.005 && <Row label="Influencer" value={`R$ ${fmtPt(result.breakdown.influencer)}`} />}
+              {result.breakdown.creditoFrete >= 0.005 && <Row label="Crédito de frete" value={`R$ ${fmtPt(result.breakdown.creditoFrete)}`} />}
+              {result.breakdown.creditoComissao >= 0.005 && <Row label="Crédito de comissão" value={`R$ ${fmtPt(result.breakdown.creditoComissao)}`} />}
+              {result.breakdown.creditoIncentivo >= 0.005 && <Row label="Crédito Incentivo" value={`R$ ${fmtPt(result.breakdown.creditoIncentivo)}`} />}
+              {result.breakdown.rebate !== 0 && <Row label="Rebate" value={`R$ ${fmtPt(result.breakdown.rebate)}`} />}
+            </div>
+
+            <div className="my-5 h-px" style={{ background: "var(--border)" }} />
+
+            <div className="flex items-center justify-between">
+              <span className="text-[14.5px] font-semibold">Margem de contribuição</span>
+              <span className="text-[19px] font-semibold" style={{ fontFamily: "var(--font-serif), serif", color: "var(--good)" }}>R$ {fmtPt(result.breakdown.margemContrib)}</span>
+            </div>
+            <div className="mt-1 flex items-center justify-between text-[13px]" style={{ color: "var(--muted)" }}>
+              <span>Receita líquida</span>
+              <span className="tabular-nums font-medium" style={{ color: "var(--text)" }}>R$ {fmtPt(result.breakdown.receitaLiquida)}</span>
+            </div>
+
+            <div className="mt-6 flex gap-2.5">
+              <button type="button" onClick={copyPorToClipboard} className="flex-1 rounded-full py-3 text-sm font-semibold" style={{ background: "var(--accent)", color: "var(--accent-ink)" }}>
+                Copiar preço
+              </button>
+              <button
+                type="button"
+                onClick={() => { resetForNewPricing(); showToast("ok", "Pronto para nova precificação."); }}
+                className="flex-1 rounded-full border py-3 text-sm font-semibold"
+                style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}
+              >
+                Começar de novo
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {toast && (
+        <div className="fixed bottom-4 right-4 z-50">
+          <div
+            className="rounded-xl border px-4 py-3 text-sm font-semibold shadow-lg"
+            style={toast.type === "ok" ? { borderColor: "var(--good-soft)", background: "var(--good-soft)", color: "var(--good)" } : { borderColor: "var(--crit-soft)", background: "var(--crit-soft)", color: "var(--crit)" }}
+          >
+            {toast.text}
           </div>
         </div>
-      </section>
-
-      {toast && <div className="fixed bottom-4 right-4 z-50"><div className={"rounded-xl px-4 py-3 text-sm font-semibold shadow-lg ring-1 " + (toast.type === "ok" ? "bg-emerald-500/15 text-emerald-100 ring-emerald-500/30" : "bg-rose-500/15 text-rose-100 ring-rose-500/30")}>{toast.text}</div></div>}
+      )}
     </div>
   );
 }
@@ -573,8 +666,8 @@ export default function PrecificacaoPage() {
 function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
     <div className="flex items-center justify-between gap-4">
-      <span className={strong ? "font-semibold text-white/90" : "text-white/70"}>{label}</span>
-      <span className={strong ? "tabular-nums font-semibold text-white" : "tabular-nums text-white/85"}>{value}</span>
+      <span style={strong ? { fontWeight: 600, color: "var(--text)" } : { color: "var(--muted)" }}>{label}</span>
+      <span className="tabular-nums" style={strong ? { fontWeight: 600, color: "var(--text)" } : { color: "var(--text)" }}>{value}</span>
     </div>
   );
 }
@@ -582,8 +675,14 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
 function SmallInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <label className="grid gap-1">
-      <span className="text-[11px] text-white/60">{label}</span>
-      <input value={value} onChange={(e) => onChange(e.target.value)} inputMode="decimal" className="h-10 rounded-xl bg-neutral-950/60 px-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60" />
+      <span className="text-[11px]" style={{ color: "var(--muted)" }}>{label}</span>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        inputMode="decimal"
+        className="h-9 rounded-lg border px-3 text-sm outline-none"
+        style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
+      />
     </label>
   );
 }
@@ -591,9 +690,15 @@ function SmallInput({ label, value, onChange }: { label: string; value: string; 
 function ModeToggle({ value, onChange, percentFirst = false }: { value: MoneyMode; onChange: (v: MoneyMode) => void; percentFirst?: boolean }) {
   const opts: MoneyMode[] = percentFirst ? ["percent", "fixed"] : ["fixed", "percent"];
   return (
-    <div className="flex gap-2">
+    <div className="flex gap-1.5">
       {opts.map((m) => (
-        <button key={m} type="button" onClick={() => onChange(m)} className={value === m ? "rounded-xl bg-white/15 px-3 py-2 text-xs font-semibold ring-1 ring-white/10" : "rounded-xl bg-white/5 px-3 py-2 text-xs font-semibold text-white/70 ring-1 ring-white/10 hover:bg-white/10"}>
+        <button
+          key={m}
+          type="button"
+          onClick={() => onChange(m)}
+          className="rounded-md px-2.5 py-1 text-[11px] font-semibold"
+          style={value === m ? { background: "var(--surface-soft)", color: "var(--text)" } : { color: "var(--muted)" }}
+        >
           {m === "percent" ? "%" : "R$"}
         </button>
       ))}
@@ -604,11 +709,18 @@ function ModeToggle({ value, onChange, percentFirst = false }: { value: MoneyMod
 function Accordion({ title, subtitle, defaultOpen = false, children }: { title: string; subtitle?: string; defaultOpen?: boolean; children: ReactNode }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5">
-      <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left">
-        <div><p className="text-sm font-semibold text-white">{title}</p>{subtitle && <p className="mt-1 text-xs text-white/50">{subtitle}</p>}</div>
-        <span className={"grid h-8 w-8 place-items-center rounded-xl bg-white/5 ring-1 ring-white/10 transition " + (open ? "rotate-180" : "")} aria-hidden>
-          <svg width="16" height="16" viewBox="0 0 24 24" className="text-white/70"><path fill="currentColor" d="M7 10l5 5 5-5z" /></svg>
+    <div className="rounded-xl border" style={{ borderColor: "var(--border)" }}>
+      <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between gap-4 px-4 py-3.5 text-left">
+        <div>
+          <p className="text-[13.5px] font-semibold">{title}</p>
+          {subtitle && <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--muted)" }}>{subtitle}</p>}
+        </div>
+        <span
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-full transition-transform"
+          style={{ background: "var(--surface-soft)", transform: open ? "rotate(180deg)" : undefined }}
+          aria-hidden
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" style={{ color: "var(--muted)" }}><path fill="currentColor" d="M7 10l5 5 5-5z" /></svg>
         </span>
       </button>
       {open && <div className="px-4 pb-4">{children}</div>}

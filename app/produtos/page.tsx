@@ -12,10 +12,6 @@ type Product = {
 
 const STORAGE_LAST_IMPORT_BASE = "markup_products_last_import_v1";
 
-function cn(...classes: (string | false | undefined)[]) {
-  return classes.filter(Boolean).join(" ");
-}
-
 function normalizeSku(s: string) {
   return (s || "").trim().toUpperCase();
 }
@@ -505,235 +501,268 @@ export default function ProdutosPage() {
     }
   }
 
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+
   return (
-    <div className="space-y-5">
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">Produtos</h1>
-            <p className="mt-1 text-sm text-white/60">
-              Base de produtos (<b>SKU</b>, <b>Nome</b>, <b>CMV</b>, <b>MLB</b>). Importação atualiza SKUs existentes e adiciona novos.
-            </p>
-            <p className="mt-2 text-xs text-white/50">
-              Status: {saving ? "salvando no banco…" : "ok"}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={onDownloadBase}
-              className="rounded-xl bg-white/5 px-4 py-2 text-sm font-semibold text-white/85 ring-1 ring-white/10 hover:bg-white/10 transition"
-            >
-              Baixar base (CSV)
-            </button>
-            <button
-              onClick={onDownloadLastImport}
-              className="rounded-xl bg-white/5 px-4 py-2 text-sm font-semibold text-white/85 ring-1 ring-white/10 hover:bg-white/10 transition"
-            >
-              Baixar última importação
-            </button>
-          </div>
+    <div className="space-y-7">
+      {/* Cabeçalho */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-[27px] font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>
+            Sua base de produtos
+          </h1>
+          <p className="mt-1.5 max-w-md text-sm" style={{ color: "var(--muted)" }}>
+            {products.length} produto{products.length === 1 ? "" : "s"} cadastrado{products.length === 1 ? "" : "s"}. O CMV daqui alimenta o cálculo em Precificação.
+            {saving ? " Salvando…" : ""}
+          </p>
         </div>
+        <button
+          type="button"
+          onClick={() => setShowAddForm((v) => !v)}
+          className="flex shrink-0 items-center gap-2 self-start rounded-full px-5 py-2.5 text-sm font-semibold"
+          style={{ background: "var(--accent)", color: "var(--accent-ink)" }}
+        >
+          + Adicionar produto
+        </button>
+      </div>
 
-        {status ? (
-          <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80">{status}</div>
-        ) : null}
-      </section>
-
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <h2 className="text-lg font-semibold">Importar produtos</h2>
-
-          <div className="flex flex-wrap gap-2">
-            <input ref={fileInputRef} type="file" accept=".csv,.txt,.xls,.xlsx" onChange={onFileChange} className="hidden" />
-            <button
-              onClick={onUploadClick}
-              className="rounded-xl bg-white/5 px-4 py-2 text-sm font-semibold text-white/85 ring-1 ring-white/10 hover:bg-white/10 transition"
-            >
-              Upload (CSV / Excel)
-            </button>
-          </div>
+      {status ? (
+        <div className="rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)", color: "var(--text)" }}>
+          {status}
         </div>
+      ) : null}
 
-        <p className="mt-2 text-xs text-white/55">
-          Você pode importar:
-          <br />• CSV/TXT com <b>SKU;Nome;CMV;MLB</b> (MLB é opcional)
-          <br />• Excel do ERP com cabeçalhos tipo <b>Descrição</b>, <b>Código (SKU)</b>, <b>Custo</b> e (se existir) <b>MLB</b>
-          <br />• Planilha de vínculo <b>item_seller</b> (SKU) + <b>item_id</b> (MLB) — atualiza o MLB no mesmo SKU
-        </p>
-
-        <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">
+      {/* Adicionar manualmente (revela sob demanda) */}
+      {showAddForm && (
+        <div className="rounded-2xl border p-5" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
           <p className="text-sm font-semibold">Adicionar produto manualmente</p>
-
           <div className="mt-3 grid gap-3 md:grid-cols-4">
             <input
               value={newSku}
               onChange={(e) => setNewSku(e.target.value)}
               placeholder="SKU"
-              className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none"
+              className="rounded-xl border px-4 py-2.5 text-sm outline-none"
+              style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
             />
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Nome"
-              className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none"
+              className="rounded-xl border px-4 py-2.5 text-sm outline-none"
+              style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
             />
             <input
               value={newCmv}
               onChange={(e) => setNewCmv(e.target.value)}
               placeholder="CMV (ex: 41,48)"
               inputMode="decimal"
-              className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none"
+              className="rounded-xl border px-4 py-2.5 text-sm outline-none"
+              style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
             />
             <input
               value={newMlb}
               onChange={(e) => setNewMlb(e.target.value)}
               placeholder="MLB (opcional)"
-              className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none"
+              className="rounded-xl border px-4 py-2.5 text-sm outline-none"
+              style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
             />
           </div>
-
           <div className="mt-3 flex justify-end">
             <button
               type="button"
-              onClick={addManualProduct}
-              className="rounded-xl bg-emerald-500/15 px-4 py-3 text-sm font-semibold text-emerald-200 ring-1 ring-emerald-500/20 hover:bg-emerald-500/20"
+              onClick={() => {
+                addManualProduct();
+                setShowAddForm(false);
+              }}
+              className="rounded-full px-5 py-2 text-sm font-semibold"
+              style={{ background: "var(--accent)", color: "var(--accent-ink)" }}
             >
-              Adicionar produto
+              Adicionar
             </button>
           </div>
         </div>
-      </section>
+      )}
 
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <h2 className="text-lg font-semibold">Base de produtos</h2>
+      {/* Busca + ferramentas */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2.5 rounded-full border px-4 py-2.5 sm:max-w-sm sm:flex-1" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+          <svg width="16" height="16" viewBox="0 0 20 20" style={{ stroke: "var(--muted)", flexShrink: 0 }} fill="none" strokeWidth="1.6" strokeLinecap="round">
+            <circle cx="8.6" cy="8.6" r="5.4" /><path d="M16.8 16.8l-3.9-3.9" />
+          </svg>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar por SKU, nome ou MLB..."
+            className="w-full bg-transparent text-sm outline-none"
+            style={{ color: "var(--text)" }}
+          />
+        </div>
 
-          <div className="flex flex-wrap gap-2">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar por SKU, nome ou MLB..."
-              className="w-72 rounded-xl bg-neutral-950/60 px-4 py-2 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60"
-            />
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <button type="button" onClick={() => setShowImport((v) => !v)} className="rounded-full border px-4 py-2 font-medium" style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}>
+            Importar
+          </button>
+          <button type="button" onClick={onDownloadBase} className="font-medium" style={{ color: "var(--accent)" }}>
+            Baixar CSV
+          </button>
+          <button type="button" onClick={onDownloadLastImport} className="font-medium" style={{ color: "var(--muted)" }}>
+            Última importação
+          </button>
+        </div>
+      </div>
 
+      {/* Painel de importação (revela sob demanda) */}
+      {showImport && (
+        <div className="rounded-2xl border p-5" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm font-semibold">Importar de arquivo</p>
+            <input ref={fileInputRef} type="file" accept=".csv,.txt,.xls,.xlsx" onChange={onFileChange} className="hidden" />
             <button
-              onClick={toggleSelectAllVisible}
-              className="rounded-xl bg-white/5 px-4 py-2 text-sm font-semibold text-white/85 ring-1 ring-white/10 hover:bg-white/10 transition"
+              onClick={onUploadClick}
+              className="self-start rounded-full border px-4 py-2 text-sm font-semibold sm:self-auto"
+              style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}
             >
+              Escolher arquivo (CSV / Excel)
+            </button>
+          </div>
+          <p className="mt-3 text-xs leading-relaxed" style={{ color: "var(--muted)" }}>
+            Você pode importar:
+            <br />• CSV/TXT com <b>SKU;Nome;CMV;MLB</b> (MLB é opcional)
+            <br />• Excel do ERP com cabeçalhos tipo <b>Descrição</b>, <b>Código (SKU)</b>, <b>Custo</b> e (se existir) <b>MLB</b>
+            <br />• Planilha de vínculo <b>item_seller</b> (SKU) + <b>item_id</b> (MLB) — atualiza o MLB no mesmo SKU
+          </p>
+        </div>
+      )}
+
+      {/* Barra de seleção (só aparece com algo selecionado) */}
+      {selectedCount > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-2.5 text-sm" style={{ background: "var(--accent-soft)", borderColor: "var(--accent-soft-border)" }}>
+          <span style={{ color: "var(--text)" }}>{selectedCount} selecionado{selectedCount === 1 ? "" : "s"}</span>
+          <div className="flex items-center gap-4">
+            <button type="button" onClick={toggleSelectAllVisible} className="font-medium" style={{ color: "var(--accent)" }}>
               {allVisibleSelected ? "Desmarcar visíveis" : "Selecionar visíveis"}
             </button>
-
-            <button
-              onClick={deleteSelected}
-              className={cn(
-                "rounded-xl px-4 py-2 text-sm font-semibold ring-1 ring-white/10 transition",
-                selectedCount > 0 ? "bg-rose-500/15 text-rose-200 hover:bg-rose-500/20" : "bg-white/5 text-white/50 cursor-not-allowed"
-              )}
-              disabled={selectedCount === 0}
-            >
-              Excluir selecionados ({selectedCount})
+            <button type="button" onClick={deleteSelected} className="font-medium" style={{ color: "var(--crit)" }}>
+              Excluir selecionados
+            </button>
+            <button type="button" onClick={() => setSelected({})} className="font-medium" style={{ color: "var(--muted)" }}>
+              Limpar
             </button>
           </div>
         </div>
+      )}
 
-        <div className="mt-4 overflow-hidden rounded-2xl border border-white/10">
-          <div className="grid grid-cols-[44px_160px_1fr_140px_140px_160px] bg-white/5 px-4 py-3 text-xs font-semibold text-white/60">
-            <span></span>
-            <span>SKU</span>
-            <span>Nome</span>
-            <span className="text-right">CMV</span>
-            <span className="text-right">MLB</span>
-            <span className="text-right">Ações</span>
-          </div>
-
-          <div className="divide-y divide-white/10">
-            {filtered.length === 0 ? (
-              <div className="px-4 py-10 text-center text-sm text-white/60">Nenhum produto encontrado.</div>
-            ) : (
-              filtered.map((p) => (
-                <div key={p.sku} className="grid grid-cols-[44px_160px_1fr_140px_140px_160px] items-center px-4 py-3 text-sm">
-                  <div className="flex items-center">
-                    <input type="checkbox" checked={!!selected[p.sku]} onChange={() => toggleOne(p.sku)} className="h-4 w-4 accent-blue-600" />
-                  </div>
-
-                  <div className="font-semibold">{p.sku}</div>
-                  <div className="text-white/85">{p.name}</div>
-                  <div className="text-right tabular-nums">{toMoneyPt(p.cmv)}</div>
-                  <div className="text-right tabular-nums text-white/80">{p.mlb ?? "—"}</div>
-
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => openEdit(p)}
-                      className="rounded-xl bg-white/5 px-3 py-2 text-xs font-semibold text-white/85 ring-1 ring-white/10 hover:bg-white/10 transition"
-                    >
-                      Editar
-                    </button>
-                    <button
-                      onClick={() => deleteOne(p.sku)}
-                      className="rounded-xl bg-rose-500/15 px-3 py-2 text-xs font-semibold text-rose-200 ring-1 ring-rose-500/20 hover:bg-rose-500/20 transition"
-                    >
-                      Excluir
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+      {/* Grade de produtos */}
+      {filtered.length === 0 ? (
+        <div className="rounded-2xl border py-16 text-center text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }}>
+          {products.length === 0 ? "Você ainda não cadastrou nenhum produto." : "Nenhum produto encontrado para essa busca."}
         </div>
-      </section>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {filtered.map((p) => (
+            <div
+              key={p.sku}
+              className="rounded-2xl border p-5 shadow-sm"
+              style={{ background: "var(--surface)", borderColor: selected[p.sku] ? "var(--accent-soft-border)" : "var(--border)" }}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="text-[15.5px] font-semibold leading-snug" style={{ fontFamily: "var(--font-serif), serif" }}>
+                  {p.name}
+                </div>
+                <input
+                  type="checkbox"
+                  checked={!!selected[p.sku]}
+                  onChange={() => toggleOne(p.sku)}
+                  className="mt-1 h-4 w-4 shrink-0 accent-current"
+                  style={{ color: "var(--accent)" }}
+                  aria-label={`Selecionar ${p.sku}`}
+                />
+              </div>
+              <div className="mt-1.5 text-[11.5px] tracking-wide" style={{ color: "var(--muted)" }}>{p.sku}</div>
+
+              <div className="mt-4 flex items-baseline justify-between">
+                <span className="text-[22px] font-semibold tabular-nums">R$ {toMoneyPt(p.cmv)}</span>
+                {p.mlb ? (
+                  <span className="rounded-full px-2.5 py-1 text-[11px] font-medium" style={{ background: "var(--good-soft)", color: "var(--good)" }}>
+                    {p.mlb}
+                  </span>
+                ) : (
+                  <span className="rounded-full px-2.5 py-1 text-[11px]" style={{ background: "var(--surface-soft)", color: "var(--muted)" }}>
+                    sem MLB
+                  </span>
+                )}
+              </div>
+
+              <div className="mt-3.5 flex gap-4 border-t pt-3" style={{ borderColor: "var(--border)" }}>
+                <button type="button" onClick={() => openEdit(p)} className="text-[12.5px] font-semibold" style={{ color: "var(--accent)" }}>
+                  Editar
+                </button>
+                <button type="button" onClick={() => deleteOne(p.sku)} className="text-[12.5px]" style={{ color: "var(--muted)" }}>
+                  Remover
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {editSku ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-neutral-950 p-5">
-            <h3 className="text-lg font-semibold">Editar produto</h3>
+        <div className="fixed inset-0 z-50 grid place-items-center p-4" style={{ background: "rgba(41,33,23,0.45)" }}>
+          <div className="w-full max-w-lg rounded-2xl border p-6" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+            <h3 className="text-[19px] font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>Editar produto</h3>
 
             <div className="mt-4 grid gap-3">
               <label className="grid gap-1">
-                <span className="text-xs text-white/60">SKU</span>
-                <input value={editSku} disabled className="rounded-xl bg-white/5 px-4 py-3 text-sm text-white/70 ring-1 ring-white/10" />
+                <span className="text-xs" style={{ color: "var(--muted)" }}>SKU</span>
+                <input value={editSku} disabled className="rounded-xl border px-4 py-2.5 text-sm" style={{ background: "var(--surface-soft)", color: "var(--muted)", borderColor: "var(--border)" }} />
               </label>
 
               <label className="grid gap-1">
-                <span className="text-xs text-white/60">Nome</span>
+                <span className="text-xs" style={{ color: "var(--muted)" }}>Nome</span>
                 <input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60"
+                  className="rounded-xl border px-4 py-2.5 text-sm outline-none"
+                  style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
                 />
               </label>
 
               <label className="grid gap-1">
-                <span className="text-xs text-white/60">CMV</span>
+                <span className="text-xs" style={{ color: "var(--muted)" }}>CMV</span>
                 <input
                   value={editCmv}
                   onChange={(e) => setEditCmv(e.target.value)}
                   inputMode="decimal"
-                  className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60"
+                  className="rounded-xl border px-4 py-2.5 text-sm outline-none"
+                  style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
                 />
               </label>
 
               <label className="grid gap-1">
-                <span className="text-xs text-white/60">MLB</span>
+                <span className="text-xs" style={{ color: "var(--muted)" }}>MLB</span>
                 <input
                   value={editMlb}
                   onChange={(e) => setEditMlb(e.target.value)}
                   placeholder="Ex: MLB46360154"
-                  className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60"
+                  className="rounded-xl border px-4 py-2.5 text-sm outline-none"
+                  style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
                 />
               </label>
             </div>
 
-            <div className="mt-5 flex justify-end gap-2">
+            <div className="mt-5 flex justify-end gap-2.5">
               <button
                 onClick={cancelEdit}
-                className="rounded-xl bg-white/5 px-4 py-2 text-sm font-semibold text-white/85 ring-1 ring-white/10 hover:bg-white/10 transition"
+                className="rounded-full border px-4 py-2 text-sm font-semibold"
+                style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}
               >
                 Cancelar
               </button>
               <button
                 onClick={saveEdit}
-                className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 transition"
+                className="rounded-full px-4 py-2 text-sm font-semibold"
+                style={{ background: "var(--accent)", color: "var(--accent-ink)" }}
               >
                 Salvar
               </button>

@@ -116,7 +116,7 @@ export function MinhaContaClient({
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      <h1 className="text-2xl font-semibold">Minha Conta</h1>
+      <h1 className="text-[27px] font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>Minha conta</h1>
 
       {/* ---- Dados Pessoais ---- */}
       <form onSubmit={saveProfile} className="rounded-2xl border theme-card p-6 space-y-5">
@@ -151,7 +151,8 @@ export function MinhaContaClient({
               <button
                 type="button"
                 onClick={() => setPreviewImage(null)}
-                className="ml-2 rounded-xl px-4 py-2 text-sm text-rose-400 hover:text-rose-300 transition"
+                className="ml-2 rounded-xl px-4 py-2 text-sm transition"
+                style={{ color: "var(--crit)" }}
               >
                 Remover
               </button>
@@ -208,11 +209,8 @@ export function MinhaContaClient({
 
         {profileMsg && (
           <div
-            className={`rounded-xl border px-4 py-2 text-sm ${
-              profileMsg.ok
-                ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
-                : "border-rose-500/25 bg-rose-500/10 text-rose-300"
-            }`}
+            className="rounded-xl border px-4 py-2 text-sm"
+            style={profileMsg.ok ? { borderColor: "var(--good-soft)", background: "var(--good-soft)", color: "var(--good)" } : { borderColor: "var(--crit-soft)", background: "var(--crit-soft)", color: "var(--crit)" }}
           >
             {profileMsg.text}
           </div>
@@ -221,11 +219,8 @@ export function MinhaContaClient({
         <button
           type="submit"
           disabled={savingProfile}
-          className={
-            savingProfile
-              ? "w-full cursor-not-allowed rounded-xl bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-200/60 ring-1 ring-emerald-500/10"
-              : "w-full rounded-xl bg-emerald-500/15 px-4 py-3 text-sm font-semibold text-emerald-300 ring-1 ring-emerald-500/20 hover:bg-emerald-500/20 transition"
-          }
+          className="w-full rounded-xl px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
+          style={{ background: "var(--accent)", color: "var(--accent-ink)" }}
         >
           {savingProfile ? "Salvando..." : "Salvar dados"}
         </button>
@@ -271,11 +266,8 @@ export function MinhaContaClient({
 
         {pwdMsg && (
           <div
-            className={`rounded-xl border px-4 py-2 text-sm ${
-              pwdMsg.ok
-                ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
-                : "border-rose-500/25 bg-rose-500/10 text-rose-300"
-            }`}
+            className="rounded-xl border px-4 py-2 text-sm"
+            style={pwdMsg.ok ? { borderColor: "var(--good-soft)", background: "var(--good-soft)", color: "var(--good)" } : { borderColor: "var(--crit-soft)", background: "var(--crit-soft)", color: "var(--crit)" }}
           >
             {pwdMsg.text}
           </div>
@@ -284,11 +276,8 @@ export function MinhaContaClient({
         <button
           type="submit"
           disabled={savingPwd}
-          className={
-            savingPwd
-              ? "w-full cursor-not-allowed rounded-xl bg-blue-500/10 px-4 py-3 text-sm font-semibold text-blue-200/60 ring-1 ring-blue-500/10"
-              : "w-full rounded-xl bg-blue-500/15 px-4 py-3 text-sm font-semibold text-blue-300 ring-1 ring-blue-500/20 hover:bg-blue-500/20 transition"
-          }
+          className="w-full rounded-xl border px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
+          style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}
         >
           {savingPwd ? "Alterando..." : "Alterar senha"}
         </button>

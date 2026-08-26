@@ -31,66 +31,69 @@ export default function CadastroPage() {
       setName("");
       setEmail("");
       setPassword("");
-    } catch (e: any) {
-      setErr(e?.message || "Erro ao cadastrar");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Erro ao cadastrar");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <h1 className="text-2xl font-semibold">Criar conta</h1>
-        <p className="mt-1 text-sm text-white/60">Cadastro por e-mail e senha.</p>
+    <div className="mx-auto max-w-lg">
+      <section className="text-center">
+        <h1 className="text-[27px] font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>Criar conta</h1>
+        <p className="mt-1.5 text-sm" style={{ color: "var(--muted)" }}>Cadastro por e-mail e senha.</p>
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <form onSubmit={onSubmit} className="grid gap-3 md:max-w-lg">
+      <section className="mt-7 rounded-2xl border p-7" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+        <form onSubmit={onSubmit} className="grid gap-3">
           <label className="grid gap-1">
-            <span className="text-xs text-white/60">Nome (opcional)</span>
+            <span className="text-xs" style={{ color: "var(--muted)" }}>Nome (opcional)</span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60"
+              className="rounded-xl border px-4 py-3 text-sm outline-none"
+              style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
               placeholder="Seu nome"
             />
           </label>
 
           <label className="grid gap-1">
-            <span className="text-xs text-white/60">Email</span>
+            <span className="text-xs" style={{ color: "var(--muted)" }}>Email</span>
             <input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               type="email"
               autoComplete="email"
-              className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60"
+              className="rounded-xl border px-4 py-3 text-sm outline-none"
+              style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
               placeholder="seu@email.com"
               required
             />
           </label>
 
           <label className="grid gap-1">
-            <span className="text-xs text-white/60">Senha</span>
+            <span className="text-xs" style={{ color: "var(--muted)" }}>Senha</span>
             <input
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               type="password"
               autoComplete="new-password"
-              className="rounded-xl bg-neutral-950/60 px-4 py-3 text-sm text-white ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-blue-600/60"
+              className="rounded-xl border px-4 py-3 text-sm outline-none"
+              style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
               placeholder="mínimo 6 caracteres"
               required
             />
           </label>
 
           {err ? (
-            <div className="rounded-xl border border-rose-500/25 bg-rose-500/10 px-4 py-2 text-sm text-rose-100">
+            <div className="rounded-xl border px-4 py-2 text-sm" style={{ borderColor: "var(--crit-soft)", background: "var(--crit-soft)", color: "var(--crit)" }}>
               {err}
             </div>
           ) : null}
 
           {ok ? (
-            <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-100">
+            <div className="rounded-xl border px-4 py-2 text-sm" style={{ borderColor: "var(--good-soft)", background: "var(--good-soft)", color: "var(--good)" }}>
               Conta criada. Volte e faça login.
             </div>
           ) : null}
@@ -98,18 +101,15 @@ export default function CadastroPage() {
           <button
             type="submit"
             disabled={loading}
-            className={
-              loading
-                ? "w-full cursor-not-allowed rounded-xl bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-200/60 ring-1 ring-emerald-500/10"
-                : "w-full rounded-xl bg-emerald-500/15 px-4 py-3 text-sm font-semibold text-emerald-200 ring-1 ring-emerald-500/20 hover:bg-emerald-500/20"
-            }
+            className="w-full rounded-xl px-4 py-3 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+            style={{ background: "var(--accent)", color: "var(--accent-ink)" }}
           >
             {loading ? "Criando..." : "Criar conta"}
           </button>
 
-          <p className="text-sm text-white/60">
+          <p className="text-sm" style={{ color: "var(--muted)" }}>
             Já tem conta?{" "}
-            <Link href="/" className="font-semibold text-white hover:underline">
+            <Link href="/" className="font-semibold" style={{ color: "var(--accent)" }}>
               Voltar para login
             </Link>
           </p>
