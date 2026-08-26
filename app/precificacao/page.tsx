@@ -206,6 +206,32 @@ export default function PrecificacaoPage() {
   const handleApplyCustos = () => setAppliedCustos({ operMode, operValue, adsMode, adsValue, cardFeeValue, influencerMode, influencerValue, descontoMode, descontoValue, rebateMode, rebateValue });
   const handleApplyAjustes = () => setAppliedAjustes({ commissionOverride, taxOverride, fixedOverride, creditFreteOverride, creditComissaoOverride, incentiveCreditOverride });
 
+  // Troca de empresa não deve carregar ajustes especiais de outra empresa: zera tanto
+  // os campos dos painéis quanto o que estava efetivamente aplicado ao cálculo.
+  function resetAjustesEspeciais() {
+    setOperMode("fixed"); setOperValue("0,00");
+    setAdsMode("fixed"); setAdsValue("0,00");
+    setCardFeeValue("");
+    setInfluencerMode("percent"); setInfluencerValue("");
+    setIncentiveCreditOverride("");
+    setDescontoMode("percent"); setDescontoValue("0");
+    setRebateMode("percent"); setRebateValue("0");
+    setCommissionOverride(""); setTaxOverride(""); setFixedOverride("");
+    setCreditFreteOverride(""); setCreditComissaoOverride("");
+    setAppliedCustos({
+      operMode: "fixed", operValue: "0,00",
+      adsMode: "fixed", adsValue: "0,00",
+      cardFeeValue: "",
+      influencerMode: "percent", influencerValue: "",
+      descontoMode: "percent", descontoValue: "0",
+      rebateMode: "percent", rebateValue: "0",
+    });
+    setAppliedAjustes({
+      commissionOverride: "", taxOverride: "", fixedOverride: "",
+      creditFreteOverride: "", creditComissaoOverride: "", incentiveCreditOverride: "",
+    });
+  }
+
   const effectiveMarkup = manualMarkup.trim() ? parseNumberPt(manualMarkup) : 3.7;
 
   // ✅ FIX 1: margem por canal via useMemo derivado — sem setState em useEffect
@@ -386,7 +412,7 @@ export default function PrecificacaoPage() {
       <Step n={1} label="Empresa">
         <select
           value={selectedEmpresaId}
-          onChange={(e) => { setSelectedEmpresaId(e.target.value); setMargemDirty(false); }}
+          onChange={(e) => { setSelectedEmpresaId(e.target.value); setMargemDirty(false); resetAjustesEspeciais(); }}
           className="w-full rounded-xl border px-3.5 py-3 text-sm outline-none"
           style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
         >

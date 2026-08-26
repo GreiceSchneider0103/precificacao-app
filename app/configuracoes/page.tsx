@@ -69,11 +69,14 @@ export default function ConfiguracoesPage() {
   const [newName, setNewName] = useState("Nova empresa");
   const [renameText, setRenameText] = useState("");
   const [status, setStatus] = useState<string>("");
+  const [editMode, setEditMode] = useState(false);
 
   const selected = useMemo(() => empresas.find((r) => r.id === selectedId) ?? null, [empresas, selectedId]);
   const padrao = useMemo(() => empresas.find((r) => r.isActive) ?? null, [empresas]);
 
-  async function load() {
+  // preserveId: mantém a empresa que estava sendo editada em foco após recarregar a
+  // lista (por padrão, sem preserveId, o foco vai para a empresa padrão/ativa).
+  async function load(preserveId?: string) {
     setStatus("Carregando...");
     const res = await fetch("/api/settings/rulesets", { cache: "no-store" });
     const json = await res.json();
@@ -84,10 +87,11 @@ export default function ConfiguracoesPage() {
     const list = (json?.rulesets ?? []) as EmpresaRow[];
     setEmpresas(list);
 
-    const activeId = list.find((x) => x.isActive)?.id ?? list[0]?.id ?? "";
-    setSelectedId(activeId);
-    setDraft(activeId ? deepClone(list.find((x) => x.id === activeId)!.data) : null);
-    setRenameText(list.find((x) => x.id === activeId)?.name ?? "");
+    const fallbackId = list.find((x) => x.isActive)?.id ?? list[0]?.id ?? "";
+    const targetId = preserveId && list.some((x) => x.id === preserveId) ? preserveId : fallbackId;
+    setSelectedId(targetId);
+    setDraft(targetId ? deepClone(list.find((x) => x.id === targetId)!.data) : null);
+    setRenameText(list.find((x) => x.id === targetId)?.name ?? "");
     setStatus("");
   }
 
@@ -106,6 +110,7 @@ export default function ConfiguracoesPage() {
     setPrevSelectedId(selectedId);
     setDraft(deepClone(selected.data));
     setRenameText(selected.name);
+    setEditMode(false);
   }
 
   function setRegime(regime: Regime) {
@@ -172,6 +177,16 @@ export default function ConfiguracoesPage() {
     setDraft(next);
   }
 
+  function setCreditoComissao(v: string) {
+    if (!draft) return;
+    const value = num(v, 0);
+    const next = deepClone(draft);
+    (Object.keys(next.channels) as ChannelKey[]).forEach((k) => {
+      next.channels[k].creditCommissionPercent = value;
+    });
+    setDraft(next);
+  }
+
   function updateChannel(k: ChannelKey, patch: Partial<RuleSetData["channels"][ChannelKey]>) {
     if (!draft) return;
     const next = deepClone(draft);
@@ -210,6 +225,7 @@ export default function ConfiguracoesPage() {
   async function save() {
     if (!draft || !selectedId) return;
     setStatus("Salvando...");
+    const savingId = selectedId;
     const res = await fetch("/api/settings/rulesets", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -221,7 +237,16 @@ export default function ConfiguracoesPage() {
       return;
     }
     setStatus("✅ Salvo");
-    await load();
+    await load(savingId);
+    setEditMode(false);
+  }
+
+  function cancelEdit() {
+    if (!selected) return;
+    setDraft(deepClone(selected.data));
+    setRenameText(selected.name);
+    setEditMode(false);
+    setStatus("");
   }
 
   async function activate() {
@@ -255,12 +280,13 @@ export default function ConfiguracoesPage() {
       return;
     }
     setStatus("✅ Empresa criada");
-    await load();
+    await load(json?.created?.id);
   }
 
   async function rename() {
     if (!selectedId) return;
     setStatus("Renomeando...");
+    const renamingId = selectedId;
     const res = await fetch("/api/settings/rulesets", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -272,7 +298,7 @@ export default function ConfiguracoesPage() {
       return;
     }
     setStatus("✅ Renomeado");
-    await load();
+    await load(renamingId);
   }
 
   async function removeEmpresa() {
@@ -308,6 +334,7 @@ export default function ConfiguracoesPage() {
   const temCreditoIcms = draft.channels.magalu?.hasCredits ?? true;
   const creditoFrete = draft.channels.magalu?.creditFretePercent ?? 0;
   const creditoIncentivo = draft.channels.magalu?.incentiveCreditPercent ?? 0;
+  const creditoComissao = draft.channels.magalu?.creditCommissionPercent ?? 0;
 
   return (
     <div className="space-y-6">
@@ -320,16 +347,38 @@ export default function ConfiguracoesPage() {
           <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
             Empresa padrão: <span className="font-medium" style={{ color: "var(--text)" }}>{padrao?.name ?? "—"}</span>
           </p>
+          <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>
+            {editMode ? "Modo edição — os campos abaixo estão liberados para alteração." : "Modo visualização — clique em “Editar” para alterar os campos desta empresa."}
+          </p>
         </div>
 
         <div className="flex items-center gap-2.5">
-          <button
-            onClick={save}
-            className="rounded-full px-5 py-2.5 text-sm font-semibold"
-            style={{ background: "var(--accent)", color: "var(--accent-ink)" }}
-          >
-            Salvar
-          </button>
+          {editMode ? (
+            <>
+              <button
+                onClick={save}
+                className="rounded-full px-5 py-2.5 text-sm font-semibold"
+                style={{ background: "var(--accent)", color: "var(--accent-ink)" }}
+              >
+                Salvar
+              </button>
+              <button
+                onClick={cancelEdit}
+                className="rounded-full border px-5 py-2.5 text-sm font-semibold"
+                style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}
+              >
+                Cancelar
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setEditMode(true)}
+              className="rounded-full px-5 py-2.5 text-sm font-semibold"
+              style={{ background: "var(--accent)", color: "var(--accent-ink)" }}
+            >
+              Editar
+            </button>
+          )}
           <button
             onClick={activate}
             className="rounded-full border px-5 py-2.5 text-sm font-semibold"
@@ -400,7 +449,8 @@ export default function ConfiguracoesPage() {
             <select
               value={draft.regime}
               onChange={(e) => setRegime(e.target.value === "simples" ? "simples" : "normal")}
-              className="border rounded-lg px-3 py-2 text-sm" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
+              disabled={!editMode}
+              className="border rounded-lg px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-70" style={{ background: editMode ? "var(--input-bg)" : "var(--surface-soft)", color: "var(--input-text)", borderColor: "var(--border)" }}
             >
               <option value="normal">Regime Normal</option>
               <option value="simples">Simples Nacional — 14%</option>
@@ -412,8 +462,9 @@ export default function ConfiguracoesPage() {
             <input
               value={draft.ufOrigem}
               onChange={(e) => setDraft({ ...draft, ufOrigem: e.target.value.toUpperCase().slice(0, 2) })}
-              className="border rounded-lg px-3 py-2 text-sm w-20"
-              style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
+              disabled={!editMode}
+              className="border rounded-lg px-3 py-2 text-sm w-20 disabled:cursor-not-allowed disabled:opacity-70"
+              style={{ background: editMode ? "var(--input-bg)" : "var(--surface-soft)", color: "var(--input-text)", borderColor: "var(--border)" }}
               placeholder="RS"
             />
           </div>
@@ -428,6 +479,7 @@ export default function ConfiguracoesPage() {
                 label="Imposto principal %"
                 value={impostoPrincipal}
                 onChange={setImpostoPrincipal}
+                disabled={!editMode}
               />
             </div>
           )}
@@ -441,7 +493,7 @@ export default function ConfiguracoesPage() {
 
             <div className="flex items-end gap-4 flex-wrap pt-3 border-t" style={{ borderColor: "var(--border)" }}>
               <div className="w-40">
-                <Field label="PIS e Cofins %" value={pisCofins} onChange={setPisCofins} />
+                <Field label="PIS e Cofins %" value={pisCofins} onChange={setPisCofins} disabled={!editMode} />
               </div>
 
               <label className="flex items-center gap-2 text-sm pb-2.5">
@@ -449,6 +501,7 @@ export default function ConfiguracoesPage() {
                   type="checkbox"
                   checked={temCreditoIcms}
                   onChange={(e) => setHasCredits(e.target.checked)}
+                  disabled={!editMode}
                 />
                 Empresa tem crédito de ICMS
               </label>
@@ -456,10 +509,13 @@ export default function ConfiguracoesPage() {
               {temCreditoIcms && (
                 <>
                   <div className="w-48">
-                    <Field label="Crédito sobre frete (ICMS) %" value={creditoFrete} onChange={setCreditoFrete} />
+                    <Field label="Crédito sobre frete (ICMS) %" value={creditoFrete} onChange={setCreditoFrete} disabled={!editMode} />
                   </div>
                   <div className="w-52">
-                    <Field label="Crédito fabricante/incentivo %" value={creditoIncentivo} onChange={setCreditoIncentivo} />
+                    <Field label="Crédito fabricante/incentivo %" value={creditoIncentivo} onChange={setCreditoIncentivo} disabled={!editMode} />
+                  </div>
+                  <div className="w-48">
+                    <Field label="Crédito de comissão %" value={creditoComissao} onChange={setCreditoComissao} disabled={!editMode} />
                   </div>
                 </>
               )}
@@ -468,7 +524,7 @@ export default function ConfiguracoesPage() {
             <p className="text-xs" style={{ color: "var(--muted)" }}>
               {temCreditoIcms
                 ? "PIS/Cofins e os créditos valem para todos os canais desta empresa."
-                : "Sem crédito de ICMS: nenhum crédito (frete ou fabricante/incentivo) é aplicado no cálculo desta empresa."}
+                : "Sem crédito de ICMS: nenhum crédito (frete, comissão ou fabricante/incentivo) é aplicado no cálculo desta empresa."}
             </p>
           </>
         ) : (
@@ -491,6 +547,7 @@ export default function ConfiguracoesPage() {
                 type="checkbox"
                 checked={draft.channels.magalu.enabled}
                 onChange={(e) => updateChannel("magalu", { enabled: e.target.checked })}
+                disabled={!editMode}
               />
               Ativo
             </label>
@@ -501,16 +558,19 @@ export default function ConfiguracoesPage() {
               label="Comissão % (padrão)"
               value={draft.channels.magalu.commissionPercent}
               onChange={(v) => updateChannel("magalu", { commissionPercent: num(v, 18) })}
+              disabled={!editMode}
             />
             <Field
               label="Margem desejada %"
               value={draft.channels.magalu.targetMarginPercent}
               onChange={(v) => updateChannel("magalu", { targetMarginPercent: num(v, 15) })}
+              disabled={!editMode}
             />
             <Field
               label="Taxa fixa R$ (por produto)"
               value={draft.channels.magalu.taxFixed}
               onChange={(v) => updateChannel("magalu", { taxFixed: num(v, 5) })}
+              disabled={!editMode}
             />
             <Hint text="Padrão: 18% + R$5/item" />
           </div>
@@ -525,6 +585,7 @@ export default function ConfiguracoesPage() {
                 type="checkbox"
                 checked={draft.channels.meli.enabled}
                 onChange={(e) => updateChannel("meli", { enabled: e.target.checked })}
+                disabled={!editMode}
               />
               Ativo
             </label>
@@ -536,8 +597,9 @@ export default function ConfiguracoesPage() {
               <select
                 value={draft.meli.plan}
                 onChange={(e) => updateMeli({ plan: e.target.value === "classic" ? "classic" : "premium" })}
-                className="border rounded-lg px-3 py-2 text-sm w-full"
-                style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
+                disabled={!editMode}
+                className="border rounded-lg px-3 py-2 text-sm w-full disabled:cursor-not-allowed disabled:opacity-70"
+                style={{ background: editMode ? "var(--input-bg)" : "var(--surface-soft)", color: "var(--input-text)", borderColor: "var(--border)" }}
               >
                 <option value="classic">Clássico</option>
                 <option value="premium">Premium</option>
@@ -551,16 +613,19 @@ export default function ConfiguracoesPage() {
               label="Clássico %"
               value={draft.meli.classicCommissionPercent}
               onChange={(v) => updateMeli({ classicCommissionPercent: num(v, 11.5) })}
+              disabled={!editMode}
             />
             <Field
               label="Premium %"
               value={draft.meli.premiumCommissionPercent}
               onChange={(v) => updateMeli({ premiumCommissionPercent: num(v, 16.5) })}
+              disabled={!editMode}
             />
             <Field
               label="Taxa fixa R$ (opcional)"
               value={draft.channels.meli.taxFixed}
               onChange={(v) => updateChannel("meli", { taxFixed: num(v, 0) })}
+              disabled={!editMode}
             />
           </div>
 
@@ -569,6 +634,7 @@ export default function ConfiguracoesPage() {
               label="Margem desejada %"
               value={draft.channels.meli.targetMarginPercent}
               onChange={(v) => updateChannel("meli", { targetMarginPercent: num(v, 13) })}
+              disabled={!editMode}
             />
             <Hint text="Padrões são editáveis e ficam salvos nesta empresa" />
           </div>
@@ -583,6 +649,7 @@ export default function ConfiguracoesPage() {
                 type="checkbox"
                 checked={draft.channels.shopee.enabled}
                 onChange={(e) => updateChannel("shopee", { enabled: e.target.checked })}
+                disabled={!editMode}
               />
               Ativo
             </label>
@@ -597,6 +664,7 @@ export default function ConfiguracoesPage() {
               label="Margem desejada %"
               value={draft.channels.shopee.targetMarginPercent}
               onChange={(v) => updateChannel("shopee", { targetMarginPercent: num(v, 15) })}
+              disabled={!editMode}
             />
             <div />
             <div />
@@ -621,8 +689,9 @@ export default function ConfiguracoesPage() {
                       <input
                         value={t.min}
                         onChange={(e) => updateShopeeTier(idx, { min: num(e.target.value, 0) })}
-                        className="w-32 rounded border px-2 py-1"
-                        style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
+                        disabled={!editMode}
+                        className="w-32 rounded border px-2 py-1 disabled:cursor-not-allowed disabled:opacity-70"
+                        style={{ background: editMode ? "var(--input-bg)" : "var(--surface-soft)", color: "var(--input-text)", borderColor: "var(--border)" }}
                         inputMode="decimal"
                         placeholder="0,00"
                       />
@@ -633,8 +702,9 @@ export default function ConfiguracoesPage() {
                         onChange={(e) =>
                           updateShopeeTier(idx, { max: e.target.value === "" ? null : num(e.target.value, 0) })
                         }
-                        className="w-40 rounded border px-2 py-1"
-                        style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
+                        disabled={!editMode}
+                        className="w-40 rounded border px-2 py-1 disabled:cursor-not-allowed disabled:opacity-70"
+                        style={{ background: editMode ? "var(--input-bg)" : "var(--surface-soft)", color: "var(--input-text)", borderColor: "var(--border)" }}
                         inputMode="decimal"
                         placeholder="∞"
                       />
@@ -643,8 +713,9 @@ export default function ConfiguracoesPage() {
                       <input
                         value={t.commissionPercent}
                         onChange={(e) => updateShopeeTier(idx, { commissionPercent: num(e.target.value, 0) })}
-                        className="w-32 rounded border px-2 py-1"
-                        style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
+                        disabled={!editMode}
+                        className="w-32 rounded border px-2 py-1 disabled:cursor-not-allowed disabled:opacity-70"
+                        style={{ background: editMode ? "var(--input-bg)" : "var(--surface-soft)", color: "var(--input-text)", borderColor: "var(--border)" }}
                         inputMode="decimal"
                         placeholder="0,00"
                       />
@@ -653,14 +724,15 @@ export default function ConfiguracoesPage() {
                       <input
                         value={t.taxFixed}
                         onChange={(e) => updateShopeeTier(idx, { taxFixed: num(e.target.value, 0) })}
-                        className="w-32 rounded border px-2 py-1"
-                        style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
+                        disabled={!editMode}
+                        className="w-32 rounded border px-2 py-1 disabled:cursor-not-allowed disabled:opacity-70"
+                        style={{ background: editMode ? "var(--input-bg)" : "var(--surface-soft)", color: "var(--input-text)", borderColor: "var(--border)" }}
                         inputMode="decimal"
                         placeholder="0,00"
                       />
                     </td>
                     <td className="p-2">
-                      <button onClick={() => removeShopeeTier(idx)} className="rounded border px-2 py-1" style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}>
+                      <button onClick={() => removeShopeeTier(idx)} disabled={!editMode} className="rounded border px-2 py-1 disabled:cursor-not-allowed disabled:opacity-70" style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}>
                         Remover
                       </button>
                     </td>
@@ -671,7 +743,7 @@ export default function ConfiguracoesPage() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            <button onClick={addShopeeTier} className="px-3 py-2 rounded-lg border text-sm" style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}>
+            <button onClick={addShopeeTier} disabled={!editMode} className="px-3 py-2 rounded-lg border text-sm disabled:cursor-not-allowed disabled:opacity-70" style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}>
               + Adicionar faixa
             </button>
 
@@ -690,6 +762,7 @@ export default function ConfiguracoesPage() {
                 type="checkbox"
                 checked={draft.channels.site.enabled}
                 onChange={(e) => updateChannel("site", { enabled: e.target.checked })}
+                disabled={!editMode}
               />
               Ativo
             </label>
@@ -700,16 +773,19 @@ export default function ConfiguracoesPage() {
               label="Taxa % (gateway)"
               value={draft.channels.site.commissionPercent}
               onChange={(v) => updateChannel("site", { commissionPercent: num(v, 1) })}
+              disabled={!editMode}
             />
             <Field
               label="Margem desejada %"
               value={draft.channels.site.targetMarginPercent}
               onChange={(v) => updateChannel("site", { targetMarginPercent: num(v, 20) })}
+              disabled={!editMode}
             />
             <Field
               label="Taxa fixa R$"
               value={draft.channels.site.taxFixed}
               onChange={(v) => updateChannel("site", { taxFixed: num(v, 0) })}
+              disabled={!editMode}
             />
             <Hint text="Padrão: 1%" />
           </div>
@@ -724,6 +800,7 @@ export default function ConfiguracoesPage() {
                 type="checkbox"
                 checked={draft.channels.outros.enabled}
                 onChange={(e) => updateChannel("outros", { enabled: e.target.checked })}
+                disabled={!editMode}
               />
               Ativo
             </label>
@@ -734,16 +811,19 @@ export default function ConfiguracoesPage() {
               label="Comissão %"
               value={draft.channels.outros.commissionPercent}
               onChange={(v) => updateChannel("outros", { commissionPercent: num(v, 18) })}
+              disabled={!editMode}
             />
             <Field
               label="Margem desejada %"
               value={draft.channels.outros.targetMarginPercent}
               onChange={(v) => updateChannel("outros", { targetMarginPercent: num(v, 20) })}
+              disabled={!editMode}
             />
             <Field
               label="Taxa fixa R$"
               value={draft.channels.outros.taxFixed}
               onChange={(v) => updateChannel("outros", { taxFixed: num(v, 0) })}
+              disabled={!editMode}
             />
             <Hint text="Padrão: 18%" />
           </div>
@@ -766,8 +846,8 @@ export default function ConfiguracoesPage() {
   );
 }
 
-function Field(props: { label: string; value: number; onChange: (v: string) => void }) {
-  const { label, value, onChange } = props;
+function Field(props: { label: string; value: number; onChange: (v: string) => void; disabled?: boolean }) {
+  const { label, value, onChange, disabled } = props;
   const [text, setText] = useState<string>(typeof value === "number" ? String(value).replace(".", ",") : "");
 
   // Ajusta o texto exibido quando o valor externo muda (ex: troca de canal/empresa),
@@ -789,8 +869,9 @@ function Field(props: { label: string; value: number; onChange: (v: string) => v
       <input
         value={text}
         onChange={(e) => handleChange(e.target.value)}
-        className="border rounded-lg px-3 py-2 text-sm w-full outline-none"
-        style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
+        disabled={disabled}
+        className="border rounded-lg px-3 py-2 text-sm w-full outline-none disabled:cursor-not-allowed disabled:opacity-70"
+        style={{ background: disabled ? "var(--surface-soft)" : "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
         inputMode="decimal"
         placeholder=",0"
       />
