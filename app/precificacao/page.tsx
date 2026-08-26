@@ -159,7 +159,7 @@ export default function PrecificacaoPage() {
   const [manualMarkup, setManualMarkup] = useState("");
   const [manualCmv, setManualCmv] = useState("");
   const [channel, setChannel] = useState<ChannelKey>("magalu");
-  const [frete, setFrete] = useState("40,00");
+  const [frete, setFrete] = useState("0,00");
   const [operMode, setOperMode] = useState<MoneyMode>("fixed");
   const [operValue, setOperValue] = useState("0,00");
   const [adsMode, setAdsMode] = useState<MoneyMode>("fixed");
@@ -179,7 +179,8 @@ export default function PrecificacaoPage() {
   const [creditFreteOverride, setCreditFreteOverride] = useState("");
   const [creditComissaoOverride, setCreditComissaoOverride] = useState("");
 
-  // Estados aplicados para cards que exigem confirmação manual
+  // Estados aplicados para cards que exigem confirmação manual (desconto e rebate
+  // saíram daqui: agora ficam no Passo 4 e recalculam ao digitar, sem precisar de Aplicar).
   const [appliedCustos, setAppliedCustos] = useState({
     operMode: "fixed" as MoneyMode,
     operValue: "0,00",
@@ -188,10 +189,6 @@ export default function PrecificacaoPage() {
     cardFeeValue: "",
     influencerMode: "percent" as MoneyMode,
     influencerValue: "",
-    descontoMode: "percent" as MoneyMode,
-    descontoValue: "0",
-    rebateMode: "percent" as MoneyMode,
-    rebateValue: "0"
   });
 
   const [appliedAjustes, setAppliedAjustes] = useState({
@@ -203,12 +200,13 @@ export default function PrecificacaoPage() {
     incentiveCreditOverride: ""
   });
 
-  const handleApplyCustos = () => setAppliedCustos({ operMode, operValue, adsMode, adsValue, cardFeeValue, influencerMode, influencerValue, descontoMode, descontoValue, rebateMode, rebateValue });
+  const handleApplyCustos = () => setAppliedCustos({ operMode, operValue, adsMode, adsValue, cardFeeValue, influencerMode, influencerValue });
   const handleApplyAjustes = () => setAppliedAjustes({ commissionOverride, taxOverride, fixedOverride, creditFreteOverride, creditComissaoOverride, incentiveCreditOverride });
 
-  // Troca de empresa não deve carregar ajustes especiais de outra empresa: zera tanto
-  // os campos dos painéis quanto o que estava efetivamente aplicado ao cálculo.
+  // Troca de empresa não deve carregar frete/ajustes especiais de outra empresa: zera o
+  // frete e os campos dos painéis, além do que estava efetivamente aplicado ao cálculo.
   function resetAjustesEspeciais() {
+    setFrete("0,00");
     setOperMode("fixed"); setOperValue("0,00");
     setAdsMode("fixed"); setAdsValue("0,00");
     setCardFeeValue("");
@@ -223,8 +221,6 @@ export default function PrecificacaoPage() {
       adsMode: "fixed", adsValue: "0,00",
       cardFeeValue: "",
       influencerMode: "percent", influencerValue: "",
-      descontoMode: "percent", descontoValue: "0",
-      rebateMode: "percent", rebateValue: "0",
     });
     setAppliedAjustes({
       commissionOverride: "", taxOverride: "", fixedOverride: "",
@@ -318,10 +314,6 @@ export default function PrecificacaoPage() {
         cardFeeValue: d.cardFeeValue || "",
         influencerMode: (d.influencerMode as MoneyMode) || "percent",
         influencerValue: d.influencerValue || "",
-        descontoMode: (d.descontoMode as MoneyMode) || "percent",
-        descontoValue: d.descontoValue || "0",
-        rebateMode: (d.rebateMode as MoneyMode) || "percent",
-        rebateValue: d.rebateValue || "0"
       });
       setAppliedAjustes({
         commissionOverride: d.commissionOverride || "", taxOverride: d.taxOverride || "", fixedOverride: d.fixedOverride || "",
@@ -363,16 +355,16 @@ export default function PrecificacaoPage() {
       cmv: effectiveCmv, markupBase: effectiveMarkup, frete: parseNumberPt(frete), 
       operMode: appliedCustos.operMode, operValue: parseNumberPt(appliedCustos.operValue), 
       adsMode: appliedCustos.adsMode, adsValue: parseNumberPt(appliedCustos.adsValue), 
-      margemAlvoPercent: parseNumberPt(margemEfetiva) || (baseCh.targetMarginPercent ?? 20), channel: ch, regime: regimeFinal, 
-      rebateMode: appliedCustos.rebateMode, rebateValue: parseNumberPt(appliedCustos.rebateValue), 
-      descontoMode: appliedCustos.descontoMode, descontoValue: parseNumberPt(appliedCustos.descontoValue),
+      margemAlvoPercent: parseNumberPt(margemEfetiva) || (baseCh.targetMarginPercent ?? 20), channel: ch, regime: regimeFinal,
+      rebateMode, rebateValue: parseNumberPt(rebateValue),
+      descontoMode, descontoValue: parseNumberPt(descontoValue),
       cardFeePercent: appliedCustos.cardFeeValue.trim() ? parseNumberPt(appliedCustos.cardFeeValue) : undefined,
       influencerMode: appliedCustos.influencerMode, influencerValue: appliedCustos.influencerValue.trim() ? parseNumberPt(appliedCustos.influencerValue) : undefined,
       incentiveCreditPercent: appliedAjustes.incentiveCreditOverride.trim() ? parseNumberPt(appliedAjustes.incentiveCreditOverride) : undefined
     };
     if (effectiveChannel === "shopee" && !appliedAjustes.commissionOverride.trim() && !appliedAjustes.taxOverride.trim() && !appliedAjustes.fixedOverride.trim() && baseCh.shopee?.mode === "tiered") return solveWithShopeeTiered({ ...common, channelRaw: baseCh });
     return { ...solvePOR(common), channelUsed: ch, regimeUsed: regimeFinal };
-  }, [settings, effectiveCmv, effectiveMarkup, effectiveChannel, meliMode, magaluShipMode, frete, margemEfetiva, appliedCustos, appliedAjustes]);
+  }, [settings, effectiveCmv, effectiveMarkup, effectiveChannel, meliMode, magaluShipMode, frete, margemEfetiva, appliedCustos, appliedAjustes, descontoMode, descontoValue, rebateMode, rebateValue]);
 
   const alerts = useMemo(() => {
     if (!result) return [];
@@ -535,8 +527,22 @@ export default function PrecificacaoPage() {
           </label>
         </div>
 
+        {/* Desconto/Cupom e Rebate recalculam direto, sem precisar de "Aplicar" */}
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <div className="rounded-xl border p-3.5" style={{ borderColor: "var(--border)" }}>
+            <p className="mb-2.5 text-[13px] font-semibold">Desconto/Cupom</p>
+            <ModeToggle value={descontoMode} onChange={setDescontoMode} percentFirst />
+            <input value={descontoValue} onChange={(e) => setDescontoValue(e.target.value)} inputMode="decimal" className="mt-2 w-full rounded-lg border px-3 py-2 text-sm outline-none" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }} />
+          </div>
+          <div className="rounded-xl border p-3.5" style={{ borderColor: "var(--border)" }}>
+            <p className="mb-2.5 text-[13px] font-semibold">Rebate</p>
+            <ModeToggle value={rebateMode} onChange={setRebateMode} percentFirst />
+            <input value={rebateValue} onChange={(e) => setRebateValue(e.target.value)} inputMode="decimal" className="mt-2 w-full rounded-lg border px-3 py-2 text-sm outline-none" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }} />
+          </div>
+        </div>
+
         <div className="mt-3 grid gap-2.5">
-          <Accordion title="Custos, ads, desconto e rebate" subtitle="Ajuste somente quando necessário.">
+          <Accordion title="Custos extras" subtitle="Ajuste somente quando necessário.">
             <div className="grid gap-3">
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="rounded-xl border p-3.5" style={{ borderColor: "var(--border)" }}>
@@ -556,18 +562,6 @@ export default function PrecificacaoPage() {
                 <div className="rounded-xl border p-3.5" style={{ borderColor: "var(--border)" }}>
                   <div className="flex items-center justify-between"><p className="text-[13px] font-semibold">Influencer</p><ModeToggle value={influencerMode} onChange={setInfluencerMode} percentFirst /></div>
                   <input value={influencerValue} onChange={(e) => setInfluencerValue(e.target.value)} inputMode="decimal" placeholder={influencerMode === "percent" ? "ex: 5" : "ex: 50,00"} className="mt-2.5 w-full rounded-lg border px-3 py-2 text-sm outline-none" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }} />
-                </div>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="rounded-xl border p-3.5" style={{ borderColor: "var(--border)" }}>
-                  <p className="mb-2.5 text-[13px] font-semibold">Desconto/Cupom</p>
-                  <ModeToggle value={descontoMode} onChange={setDescontoMode} percentFirst />
-                  <input value={descontoValue} onChange={(e) => setDescontoValue(e.target.value)} inputMode="decimal" className="mt-2 w-full rounded-lg border px-3 py-2 text-sm outline-none" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }} />
-                </div>
-                <div className="rounded-xl border p-3.5" style={{ borderColor: "var(--border)" }}>
-                  <p className="mb-2.5 text-[13px] font-semibold">Rebate</p>
-                  <ModeToggle value={rebateMode} onChange={setRebateMode} percentFirst />
-                  <input value={rebateValue} onChange={(e) => setRebateValue(e.target.value)} inputMode="decimal" className="mt-2 w-full rounded-lg border px-3 py-2 text-sm outline-none" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }} />
                 </div>
               </div>
               <button type="button" onClick={handleApplyCustos} className="w-full rounded-full py-2.5 text-sm font-semibold" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>Aplicar mudanças</button>
