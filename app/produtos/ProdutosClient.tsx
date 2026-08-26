@@ -461,6 +461,44 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
     downloadText(`markup-ultima-importacao-${stamp}.csv`, last);
   }
 
+  // Cadastra só os SKUs colados (sem nome/CMV) — vira a "lista de rastreio" que o
+  // Tiny preenche depois via sincronização, sem precisar puxar a base toda do ERP.
+  function addTrackedSkus(rawText: string) {
+    const tokens = rawText
+      .split(/[\n,;]+/)
+      .map((t) => normalizeSku(t))
+      .filter(Boolean);
+    const uniqueSkus = Array.from(new Set(tokens));
+    if (uniqueSkus.length === 0) return toast("Cole ao menos um SKU.");
+
+    importItems(uniqueSkus.map((sku) => ({ sku })));
+  }
+
+  async function clearAllProducts() {
+    if (!selectedEmpresaId) return;
+    const empresaLabel = selectedEmpresaId === NONE_EMPRESA ? "Sem empresa (legado)" : selectedEmpresa?.name ?? "esta empresa";
+    const ok = window.confirm(
+      `Isso vai apagar TODOS os ${products.length} produtos cadastrados em "${empresaLabel}" — não dá pra desfazer. Continuar?`
+    );
+    if (!ok) return;
+
+    setSaving(true);
+    try {
+      const qs = selectedEmpresaId === NONE_EMPRESA ? "empresaId=none" : `empresaId=${encodeURIComponent(selectedEmpresaId)}`;
+      const res = await fetch(`/api/products?${qs}&all=true`, { method: "DELETE" });
+      const data = (await res.json()) as { deleted?: number; error?: string };
+      if (!res.ok) throw new Error(data?.error || "Erro ao limpar produtos");
+      setProducts([]);
+      setSelected({});
+      toast(`${data.deleted ?? 0} produtos removidos.`);
+    } catch (e) {
+      console.error(e);
+      toast("Erro ao limpar produtos (veja o console).");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function toggleSelectAllVisible() {
     const next = { ...selected };
     const target = !allVisibleSelected;
@@ -641,6 +679,8 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showTrackedSkus, setShowTrackedSkus] = useState(false);
+  const [trackedSkusText, setTrackedSkusText] = useState("");
 
   const canSyncSingle = !!selectedEmpresa?.tinyApiToken;
   const canSyncAll = role === "MASTER" && empresas.some((e) => e.tinyApiToken);
@@ -792,6 +832,9 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-sm">
+          <button type="button" onClick={() => setShowTrackedSkus((v) => !v)} className="rounded-full border px-4 py-2 font-medium" style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}>
+            Cadastrar SKUs para rastrear
+          </button>
           <button type="button" onClick={() => setShowImport((v) => !v)} className="rounded-full border px-4 py-2 font-medium" style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}>
             Importar
           </button>
@@ -801,8 +844,44 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
           <button type="button" onClick={onDownloadLastImport} className="font-medium" style={{ color: "var(--muted)" }}>
             Última importação
           </button>
+          <button type="button" onClick={clearAllProducts} disabled={products.length === 0} className="font-medium disabled:cursor-not-allowed disabled:opacity-50" style={{ color: "var(--crit)" }}>
+            Limpar todos
+          </button>
         </div>
       </div>
+
+      {/* Cadastro rápido de SKUs a rastrear (revela sob demanda) */}
+      {showTrackedSkus && (
+        <div className="rounded-2xl border p-5" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+          <p className="text-sm font-semibold">Cadastrar SKUs para rastrear</p>
+          <p className="mt-1 text-xs leading-relaxed" style={{ color: "var(--muted)" }}>
+            Cole aqui só os SKUs que vocês realmente usam nos marketplaces (um por linha, ou separados por vírgula) — sem
+            precisar de nome ou CMV. Eles entram nesta empresa com CMV zerado e o botão &ldquo;Atualizar CMV&rdquo; preenche o
+            resto a partir do Tiny.
+          </p>
+          <textarea
+            value={trackedSkusText}
+            onChange={(e) => setTrackedSkusText(e.target.value)}
+            placeholder={"SKU-001\nSKU-002\nSKU-003"}
+            rows={6}
+            className="mt-3 w-full rounded-xl border px-4 py-2.5 text-sm outline-none"
+            style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
+          />
+          <div className="mt-3 flex justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                addTrackedSkus(trackedSkusText);
+                setTrackedSkusText("");
+              }}
+              className="rounded-full px-5 py-2 text-sm font-semibold"
+              style={{ background: "var(--accent)", color: "var(--accent-ink)" }}
+            >
+              Cadastrar SKUs
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Painel de importação (revela sob demanda) */}
       {showImport && (

@@ -137,6 +137,19 @@ export async function DELETE(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
+    const empresaParam = searchParams.get("empresaId");
+    const clearAll = searchParams.get("all") === "true";
+
+    // Limpa todos os produtos de uma empresa de uma vez (?empresaId=X&all=true, ou
+    // ?empresaId=none&all=true para os produtos legados sem empresa).
+    if (clearAll) {
+      if (empresaParam === null) {
+        return NextResponse.json({ error: "empresaId é obrigatório" }, { status: 400 });
+      }
+      const empresaId = empresaParam === "none" ? null : empresaParam;
+      const result = await prisma.product.deleteMany({ where: { userId, empresaId } });
+      return NextResponse.json({ success: true, deleted: result.count });
+    }
 
     if (!id) {
       return NextResponse.json({ error: "ID do produto é obrigatório" }, { status: 400 });
