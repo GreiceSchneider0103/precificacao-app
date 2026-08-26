@@ -365,7 +365,7 @@ export default function PrecificacaoPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-7">
+    <div className="space-y-7">
       <div>
         <h1 className="text-[27px] font-semibold" style={{ fontFamily: "var(--font-serif), serif" }}>Qual o preço ideal?</h1>
         <p className="mt-1.5 text-sm" style={{ color: "var(--muted)" }}>Escolha o produto e o canal — o resto o Markup calcula para você.</p>
@@ -376,6 +376,10 @@ export default function PrecificacaoPage() {
           Ainda não encontrei Configurações salvas. Vá em <b>Configurações</b>, salve e volte aqui.
         </div>
       )}
+
+      <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_400px]">
+      {/* COLUNA ESQUERDA — formulário */}
+      <div className="max-w-2xl space-y-7">
 
       {/* PASSO 1 — PRODUTO */}
       <Step n={1} label="Produto">
@@ -558,6 +562,11 @@ export default function PrecificacaoPage() {
         </div>
       </Step>
 
+      </div>
+      {/* fim coluna esquerda */}
+
+      {/* COLUNA DIREITA — resultado, fixo ao rolar */}
+      <div className="space-y-4 lg:sticky lg:top-6">
       {/* RESULTADO */}
       {!result ? (
         <div className="rounded-2xl border p-5 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)", color: "var(--muted)" }}>
@@ -604,7 +613,7 @@ export default function PrecificacaoPage() {
               </p>
             </div>
 
-            <div className="mt-5 grid gap-x-8 gap-y-2 text-[13px] sm:grid-cols-2">
+            <div className="mt-5 grid gap-y-2 text-[13px]">
               {result.breakdown.comissao >= 0.005 && <Row label={`${effectiveChannel === 'site_modifika' ? 'Taxa Marketplace' : 'Comissão'} (${result.channelUsed.commissionPercent.toFixed(2)}%)`} value={`R$ ${fmtPt(result.breakdown.comissao)}`} />}
               {result.breakdown.imposto >= 0.005 && <Row label={`Imposto (${result.channelUsed.mainTaxPercent.toFixed(2)}%)`} value={`R$ ${fmtPt(result.breakdown.imposto)}`} />}
               {result.breakdown.pisCofins >= 0.005 && <Row label={`PIS/COFINS ${result.regimeUsed === "normal" ? `(${(result.channelUsed.pisCofinsPercent ?? 9.25).toString().replace(".", ",")}%)` : "(não aplica)"}`} value={`R$ ${fmtPt(result.breakdown.pisCofins)}`} />}
@@ -648,6 +657,9 @@ export default function PrecificacaoPage() {
           </div>
         </>
       )}
+      </div>
+      {/* fim coluna direita */}
+      </div>
 
       {toast && (
         <div className="fixed bottom-4 right-4 z-50">
