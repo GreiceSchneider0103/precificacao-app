@@ -7,15 +7,10 @@
 // auth.ts inteiro. auth.ts reaproveita este config e adiciona as partes que só rodam em
 // Node.js (rotas de API, server components).
 import type { NextAuthConfig } from "next-auth";
-import Google from "next-auth/providers/google";
 
 export default {
-  providers: [
-    Google({
-      clientId: process.env.AUTH_GOOGLE_ID,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET,
-    }),
-  ],
+  // Só login por e-mail/senha (ver auth.ts) — sem provider OAuth aqui.
+  providers: [],
 
   session: { strategy: "jwt", maxAge: 30 * 24 * 60 * 60 },
 

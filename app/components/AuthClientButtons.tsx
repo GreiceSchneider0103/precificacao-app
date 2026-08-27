@@ -66,26 +66,6 @@ export function PasswordInput({
   );
 }
 
-// ---- Botão Google ----
-export function GoogleButton({
-  label = "Entrar com Google",
-  callbackUrl = "/precificacao",
-}: {
-  label?: string;
-  callbackUrl?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => signIn("google", { callbackUrl })}
-      className="w-full rounded-xl border px-4 py-3 text-sm font-semibold transition-colors"
-      style={{ borderColor: "var(--border-strong)", color: "var(--text)", background: "var(--surface)" }}
-    >
-      {label}
-    </button>
-  );
-}
-
 // ---- Botão Sair ----
 export function SignOutButton() {
   return (

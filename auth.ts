@@ -10,7 +10,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
 
   providers: [
-    ...authConfig.providers,
     Credentials({
       name: "credentials",
       credentials: {
@@ -32,29 +31,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-
-  callbacks: {
-    ...authConfig.callbacks,
-    // ✅ FIX: removido parâmetro `profile` não utilizado; tipo explícito no lugar de `any`
-    async signIn({ user, account }) {
-      if (account?.provider === "google") {
-        const existingUser = await prisma.user.findUnique({
-          where: { email: user.email! },
-          include: { accounts: true },
-        });
-        if (existingUser) {
-          const hasGoogle = existingUser.accounts.some(
-            // ✅ FIX: tipo explícito em vez de `any`
-            (acc: { provider: string }) => acc.provider === "google"
-          );
-          if (!hasGoogle && !existingUser.emailVerified) {
-            return "/auth/error?error=EmailNotVerified";
-          }
-        }
-      }
-      return true;
-    },
-  },
 });
 
 declare module "next-auth" {
