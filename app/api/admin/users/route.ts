@@ -20,7 +20,10 @@ export async function GET() {
 
     const [users, empresasOwned] = await Promise.all([
       prisma.user.findMany({
-        where: { id: { not: session.user.id } },
+        // Outras contas MASTER (ex: alguém que já tinha logado antes deste recurso
+        // existir, quando toda conta nova virava master) nunca podem ser geridas por
+        // aqui — mostrá-las só gera um botão que sempre falha. Fica de fora da lista.
+        where: { id: { not: session.user.id }, role: "MEMBER" },
         select: {
           id: true,
           name: true,

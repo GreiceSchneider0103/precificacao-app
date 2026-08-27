@@ -45,7 +45,7 @@ export function UsuariosClient() {
       });
     } catch (e) {
       console.error(e);
-      toast("Erro ao carregar usuários (veja o console).");
+      toast(e instanceof Error ? e.message : "Erro ao carregar usuários.");
     } finally {
       setLoading(false);
     }
@@ -84,7 +84,7 @@ export function UsuariosClient() {
       toast(`Empresa "${created.name}" criada e marcada para este usuário.`);
     } catch (e) {
       console.error(e);
-      toast("Erro ao criar empresa (veja o console).");
+      toast(e instanceof Error ? e.message : "Erro ao criar empresa.");
     } finally {
       setSavingId(null);
     }
@@ -105,7 +105,7 @@ export function UsuariosClient() {
       await load();
     } catch (e) {
       console.error(e);
-      toast("Erro ao salvar (veja o console).");
+      toast(e instanceof Error ? e.message : "Erro ao salvar.");
     } finally {
       setSavingId(null);
     }
@@ -127,7 +127,7 @@ export function UsuariosClient() {
       await load();
     } catch (e) {
       console.error(e);
-      toast("Erro ao remover (veja o console).");
+      toast(e instanceof Error ? e.message : "Erro ao remover.");
     } finally {
       setSavingId(null);
     }
