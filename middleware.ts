@@ -6,8 +6,16 @@
 // já faziam sua própria checagem de sessão (auth() dentro de cada uma) continuaram
 // seguras, mas Precificação e Configurações (client components sem checagem própria)
 // dependiam só deste middleware, que estava inerte.
-import { auth } from "@/auth";
+//
+// Usa uma instância própria e "leve" do NextAuth (auth.config.ts, sem Prisma/bcrypt),
+// não o `auth` de auth.ts — o middleware roda no Edge Runtime do Vercel, e importar
+// auth.ts inteiro (PrismaAdapter + bcrypt) estourou o limite de 1MB do Edge Function do
+// plano, derrubando o deploy.
+import NextAuth from "next-auth";
+import authConfig from "./auth.config";
 import { NextResponse } from "next/server";
+
+const { auth } = NextAuth(authConfig);
 
 // 1. Caminhos que exigem login (UI)
 const PROTECTED_UI_PATHS = [
