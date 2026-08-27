@@ -664,6 +664,7 @@ export default function PrecificacaoPage() {
               {result.breakdown.creditoFrete >= 0.005 && <Row label="Crédito de frete" value={`R$ ${fmtPt(result.breakdown.creditoFrete)}`} />}
               {result.breakdown.creditoComissao >= 0.005 && <Row label="Crédito de comissão" value={`R$ ${fmtPt(result.breakdown.creditoComissao)}`} />}
               {result.breakdown.creditoIncentivo >= 0.005 && <Row label="Crédito Incentivo" value={`R$ ${fmtPt(result.breakdown.creditoIncentivo)}`} />}
+              {result.breakdown.desconto >= 0.005 && <Row label="Desconto/Cupom" value={`R$ ${fmtPt(result.breakdown.desconto)}`} />}
               {result.breakdown.rebate !== 0 && <Row label="Rebate" value={`R$ ${fmtPt(result.breakdown.rebate)}`} />}
             </div>
 

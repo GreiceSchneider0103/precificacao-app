@@ -380,6 +380,113 @@ describe('solvePOR - Pricing Algorithm', () => {
     });
   });
 
+  describe('Desconto', () => {
+    it('should apply fixed desconto', () => {
+      const result = solvePOR({
+        cmv: 100,
+        markupBase: 2,
+        frete: 15,
+        margemAlvoPercent: 30,
+        channel: baseChannel,
+        regime: 'simples',
+        operMode: 'fixed',
+        operValue: 0,
+        adsMode: 'fixed',
+        adsValue: 0,
+        rebateMode: 'fixed',
+        rebateValue: 0,
+        descontoMode: 'fixed',
+        descontoValue: 10,
+      });
+
+      expect(result.breakdown.desconto).toBe(10);
+    });
+
+    it('should apply percentage desconto', () => {
+      const result = solvePOR({
+        cmv: 100,
+        markupBase: 2,
+        frete: 15,
+        margemAlvoPercent: 30,
+        channel: baseChannel,
+        regime: 'simples',
+        operMode: 'fixed',
+        operValue: 0,
+        adsMode: 'fixed',
+        adsValue: 0,
+        rebateMode: 'fixed',
+        rebateValue: 0,
+        descontoMode: 'percent',
+        descontoValue: 12,
+      });
+
+      expect(result.breakdown.desconto).toBeGreaterThan(0);
+    });
+
+    it('should require a HIGHER POR to hit the same margin when a percentage desconto is applied', () => {
+      // Desconto percentual é um custo real (dinheiro que não entra), então precisa
+      // aumentar o POR necessário para atingir a mesma margem alvo — o oposto do rebate.
+      const baseParams = {
+        cmv: 100,
+        markupBase: 2,
+        frete: 15,
+        margemAlvoPercent: 30,
+        channel: baseChannel,
+        regime: 'simples' as const,
+        operMode: 'fixed' as const,
+        operValue: 0,
+        adsMode: 'fixed' as const,
+        adsValue: 0,
+        rebateMode: 'fixed' as const,
+        rebateValue: 0,
+      };
+
+      const withoutDesconto = solvePOR({ ...baseParams, descontoMode: 'fixed', descontoValue: 0 });
+      const withDesconto = solvePOR({ ...baseParams, descontoMode: 'percent', descontoValue: 12 });
+
+      expect(withDesconto.POR_sugerido).toBeGreaterThan(withoutDesconto.POR_sugerido);
+      expect(withDesconto.breakdown.margemPct).toBeCloseTo(30, 0);
+    });
+
+    it('should net desconto against rebate so only the uncovered portion hits the margin (12% desconto, 5% rebate)', () => {
+      // Caso relatado pela usuária: 12% de desconto com 5% de rebate — os 7% líquidos
+      // é que devem pesar de fato na margem, batendo com a margem alvo informada.
+      const baseParams = {
+        cmv: 100,
+        markupBase: 2,
+        frete: 15,
+        margemAlvoPercent: 10,
+        channel: baseChannel,
+        regime: 'simples' as const,
+        operMode: 'fixed' as const,
+        operValue: 0,
+        adsMode: 'fixed' as const,
+        adsValue: 0,
+      };
+
+      const result = solvePOR({
+        ...baseParams,
+        descontoMode: 'percent',
+        descontoValue: 12,
+        rebateMode: 'percent',
+        rebateValue: 5,
+      });
+
+      expect(result.breakdown.margemPct).toBeCloseTo(10, 0);
+
+      const onlyNetDesconto = solvePOR({
+        ...baseParams,
+        descontoMode: 'percent',
+        descontoValue: 7,
+        rebateMode: 'fixed',
+        rebateValue: 0,
+      });
+
+      // Deve bater aproximadamente com aplicar só os 7% líquidos de desconto direto.
+      expect(result.POR_sugerido).toBeCloseTo(onlyNetDesconto.POR_sugerido, 0);
+    });
+  });
+
   describe('Edge Cases', () => {
     it('should handle zero CMV', () => {
       const result = solvePOR({

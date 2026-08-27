@@ -131,85 +131,76 @@ export function solvePOR(params: {
 
   const cardFeeVal = cardFeePercent ?? channel.cardFeePercent ?? 0;
   const incCredVal = incentiveCreditPercent ?? channel.incentiveCreditPercent ?? 0;
+  const descontoMode = params.descontoMode ?? "percent";
+  const descontoValue = params.descontoValue ?? 0;
 
   const m = clamp(margemAlvoPercent / 100, 0, 0.95);
 
-  const POR = (() => {
-    const c = channel.commissionPercent / 100;
-    const t = channel.mainTaxPercent / 100;
-    const pVal = (pisCofinsOverride ?? channel.pisCofinsPercent ?? 9.25) / 100;
-
-    const pisCoeff = regime === "normal" ? pVal * (1 - t) : 0;
-
-    const operCoeff = operMode === "percent" ? operValue / 100 : 0;
-    const adsCoeff = adsMode === "percent" ? adsValue / 100 : 0;
-
-    const operFixed = operMode === "fixed" ? operValue : 0;
-    const adsFixed = adsMode === "fixed" ? adsValue : 0;
-
-    const cardFeeCoeff = cardFeeVal / 100;
-    const infVal = influencerValue ?? (influencerMode === "percent" ? channel.influencerPercent ?? 0 : 0);
-    const influencerCoeff = influencerMode === "percent" ? infVal / 100 : 0;
-    const influencerFixed = influencerMode === "fixed" ? infVal : 0;
-    const incentiveCredCoeff = regime === "normal" ? incCredVal / 100 : 0;
-
-    const fixedCosts = channel.taxFixed + frete + cmv + operFixed + adsFixed + influencerFixed;
-
-    const credFrete =
-      regime === "normal" && channel.hasCredits ? frete * (channel.creditFretePercent / 100) : 0;
-
-    const credComissaoCoeff =
-      regime === "normal" && channel.hasCredits
-        ? c * (channel.creditCommissionPercent / 100)
-        : 0;
-
-    const rebateFixed = rebateMode === "fixed" ? rebateValue : 0;
-    const rebateCoeff = rebateMode === "percent" ? rebateValue / 100 : 0;
-
-    const leftCoeff =
-      1 -
-      c -
-      t -
-      pisCoeff -
-      operCoeff -
-      adsCoeff +
-      credComissaoCoeff +
-      incentiveCredCoeff -
-      cardFeeCoeff - // influencerCoeff/cardFeeCoeff são custos, por isso subtraídos
-      influencerCoeff +
-      rebateCoeff - // rebate é benefício (somado à mc no breakdown abaixo), por isso somado aqui
-      m;
-
-    const right = fixedCosts - credFrete - rebateFixed;
-
-    if (leftCoeff <= 0.000001) return 0;
-    const porPago = right / leftCoeff;
-
-    // Cupom/desconto: se informado, inverter para calcular preço publicado
-    let porLista = porPago;
-    if (params.descontoMode === "percent") {
-      const pct = (params.descontoValue ?? 0) / 100;
-      porLista = pct >= 1 ? porPago : porPago / (1 - pct);
-    } else if (params.descontoMode === "fixed") {
-      porLista = porPago + (params.descontoValue ?? 0);
-    }
-    return porLista;
-  })();
-
-  const comissaoVal = POR * (channel.commissionPercent / 100);
-  const impostoVal = POR * (channel.mainTaxPercent / 100);
+  const c = channel.commissionPercent / 100;
+  const t = channel.mainTaxPercent / 100;
   const pVal = (pisCofinsOverride ?? channel.pisCofinsPercent ?? 9.25) / 100;
-  const pisVal = regime === "normal" ? pVal * (POR - impostoVal) : 0;
 
-  const operR$ = operMode === "percent" ? POR * (operValue / 100) : operValue;
-  const adsR$ = adsMode === "percent" ? POR * (adsValue / 100) : adsValue;
-  const cardFeeR$ = POR * (cardFeeVal / 100);
+  const pisCoeff = regime === "normal" ? pVal * (1 - t) : 0;
 
-  const infValFinal = influencerValue ?? (influencerMode === "percent" ? channel.influencerPercent ?? 0 : 0);
-  const influencerR$ = influencerMode === "percent" ? POR * (infValFinal / 100) : infValFinal;
+  const operCoeff = operMode === "percent" ? operValue / 100 : 0;
+  const adsCoeff = adsMode === "percent" ? adsValue / 100 : 0;
+
+  const operFixed = operMode === "fixed" ? operValue : 0;
+  const adsFixed = adsMode === "fixed" ? adsValue : 0;
+
+  const cardFeeCoeff = cardFeeVal / 100;
+  const infVal = influencerValue ?? (influencerMode === "percent" ? channel.influencerPercent ?? 0 : 0);
+  const influencerCoeff = influencerMode === "percent" ? infVal / 100 : 0;
+  const influencerFixed = influencerMode === "fixed" ? infVal : 0;
+  const incentiveCredCoeff = regime === "normal" ? incCredVal / 100 : 0;
+
+  const fixedCosts = channel.taxFixed + frete + cmv + operFixed + adsFixed + influencerFixed;
 
   const credFrete =
     regime === "normal" && channel.hasCredits ? frete * (channel.creditFretePercent / 100) : 0;
+
+  const credComissaoCoeff =
+    regime === "normal" && channel.hasCredits
+      ? c * (channel.creditCommissionPercent / 100)
+      : 0;
+
+  const rebateFixed = rebateMode === "fixed" ? rebateValue : 0;
+  const rebateCoeff = rebateMode === "percent" ? rebateValue / 100 : 0;
+
+  // Desconto é um custo real (dinheiro que deixa de entrar no bolso), simétrico ao
+  // rebate: entra na MESMA equação de margem — não só "infla" o preço mostrado depois
+  // do cálculo. Assim, um desconto parcialmente coberto por rebate (ex: 12% de desconto
+  // com 5% de rebate) deixa só os 7% líquidos pesando de fato na margem.
+  const descontoFixed = descontoMode === "fixed" ? descontoValue : 0;
+  const descontoCoeff = descontoMode === "percent" ? descontoValue / 100 : 0;
+
+  const leftCoeff =
+    1 -
+    c -
+    t -
+    pisCoeff -
+    operCoeff -
+    adsCoeff -
+    descontoCoeff + // desconto é custo, por isso subtraído (como comissão/imposto)
+    credComissaoCoeff +
+    incentiveCredCoeff -
+    cardFeeCoeff - // influencerCoeff/cardFeeCoeff são custos, por isso subtraídos
+    influencerCoeff +
+    rebateCoeff - // rebate é benefício (somado à mc no breakdown abaixo), por isso somado aqui
+    m;
+
+  const right = fixedCosts + descontoFixed - credFrete - rebateFixed;
+
+  const POR = leftCoeff <= 0.000001 ? 0 : right / leftCoeff;
+
+  const comissaoVal = POR * c;
+  const impostoVal = POR * t;
+  const pisVal = regime === "normal" ? pVal * (POR - impostoVal) : 0;
+
+  const operR$ = operMode === "percent" ? POR * operCoeff : operValue;
+  const adsR$ = adsMode === "percent" ? POR * adsCoeff : adsValue;
+  const cardFeeR$ = POR * cardFeeCoeff;
+  const influencerR$ = influencerMode === "percent" ? POR * influencerCoeff : infVal;
 
   const credComissao =
     regime === "normal" && channel.hasCredits
@@ -218,7 +209,8 @@ export function solvePOR(params: {
 
   const credIncentivo = regime === "normal" ? POR * (incCredVal / 100) : 0;
 
-  const rebateVal = rebateMode === "percent" ? POR * (rebateValue / 100) : rebateValue;
+  const rebateVal = rebateMode === "percent" ? POR * rebateCoeff : rebateValue;
+  const descontoVal = descontoMode === "percent" ? POR * descontoCoeff : descontoFixed;
 
   const mc =
     POR -
@@ -230,8 +222,9 @@ export function solvePOR(params: {
     cmv -
     operR$ -
     adsR$ -
-    cardFeeR$ - // Corrigido: taxaCartao é um custo, deve ser subtraído
-    influencerR$ + // Corrigido: Créditos e descontos abaixo são somados
+    cardFeeR$ -
+    influencerR$ -
+    descontoVal + // desconto é custo, por isso subtraído
     credFrete +
     credComissao +
     credIncentivo +
@@ -265,6 +258,7 @@ export function solvePOR(params: {
       creditoComissao: credComissao,
       creditoIncentivo: credIncentivo,
       rebate: rebateVal,
+      desconto: descontoVal,
       margemContrib: mc,
       margemPct: mcPct,
       receitaLiquida,
