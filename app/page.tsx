@@ -1,7 +1,7 @@
 // app/page.tsx
 import Link from "next/link";
 import { auth } from "@/auth";
-import { CredentialsLogin, GoogleButton, SignOutButton } from "./components/AuthClientButtons";
+import { CredentialsLogin, SignOutButton } from "./components/AuthClientButtons";
 
 export default async function HomePage() {
   const session = await auth();
@@ -70,15 +70,6 @@ export default async function HomePage() {
             Criar cadastro
           </Link>
         </p>
-      </section>
-
-      <section className="mt-4 rounded-2xl border p-7" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>
-          Google
-        </p>
-        <div className="mt-4">
-          <GoogleButton />
-        </div>
       </section>
     </div>
   );
