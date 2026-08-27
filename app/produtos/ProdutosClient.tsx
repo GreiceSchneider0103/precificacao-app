@@ -737,18 +737,20 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
         setSyncState({ running: !done, processed: Math.min(processedSoFar, totalKnown), total: totalKnown, mode: all ? "all" : "single" });
         if (done) break;
 
-        // O Tiny pede "aguarde alguns minutos" quando bloqueia por excesso de acessos —
-        // insistir rápido só piora. Continua automaticamente (sem precisar clicar de
-        // novo), mas espera de verdade antes da próxima tentativa, e desiste depois de
-        // algumas rodadas bloqueadas (a sincronização semanal automática continua depois).
+        // O Tiny pede "aguarde alguns minutos" quando bloqueia por excesso de acessos, mas
+        // 2 minutos na prática não foi tempo suficiente (a cota parece ser por hora, não
+        // por minuto) — insistir rápido só piora. Continua automaticamente (sem precisar
+        // clicar de novo), mas espera de verdade antes da próxima tentativa, e desiste
+        // depois de algumas rodadas bloqueadas (a sincronização semanal automática
+        // continua depois de onde parou).
         if (blockedNow) {
           blockedWaits++;
           if (blockedWaits > 5) {
             gaveUpDueToBlock = true;
             break;
           }
-          setStatus(`Tiny bloqueou temporariamente o acesso à API (excesso de acessos) — continuando automaticamente em 2 minutos…`);
-          await new Promise((resolve) => setTimeout(resolve, 120000));
+          setStatus(`Tiny bloqueou temporariamente o acesso à API (excesso de acessos) — continuando automaticamente em 5 minutos…`);
+          await new Promise((resolve) => setTimeout(resolve, 5 * 60 * 1000));
         }
       }
 

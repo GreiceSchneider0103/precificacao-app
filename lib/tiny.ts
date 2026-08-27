@@ -12,7 +12,10 @@
 import { prisma } from "@/lib/prisma";
 
 const TINY_BASE = "https://api.tiny.com.br/api2";
-const PACING_MS = 700; // intervalo entre chamadas ao Tiny, para não estourar limite de taxa
+// 700ms ainda não foi devagar o bastante para evitar o bloqueio "Excedido o número de
+// acessos" observado em produção — a cota real do Tiny parece contar por minuto/hora, não
+// por segundo. 1.5s entre chamadas reduz o ritmo de ~85 para ~40 chamadas/min.
+const PACING_MS = 1500;
 const MAX_RATE_LIMIT_RETRIES = 3;
 
 // Erro específico para respostas de limite de requisições do Tiny (HTTP 429 ou texto do

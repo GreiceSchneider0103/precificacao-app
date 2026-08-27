@@ -19,7 +19,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const CRON_BUDGET_MS = 50000;
-const MAX_CHAIN_HOPS = 8; // ~8 saltos de ~50s ≈ 6-7 min de progresso automático por disparo
+// Com o pacing mais lento (1.5s/chamada, ver lib/tiny.ts), cada salto processa menos SKUs
+// — compensa com mais saltos. ~16 saltos de ~50s ≈ 13 min de progresso automático por disparo.
+const MAX_CHAIN_HOPS = 16;
 
 function splitBudget(totalMs: number, count: number) {
   return Math.max(2000, Math.floor(totalMs / Math.max(1, count)));
