@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getSessionOrThrow } from "@/lib/utils";
+import { getEmpresaAccess } from "@/lib/access";
 import { revalidatePath } from "next/cache";
 
 // ✅ Tópico E: Força a API a ser sempre dinâmica
@@ -59,19 +60,34 @@ function normalizeData(input: any): RuleSetData {
 }
 
 /**
- * GET: Carrega os Rulesets do usuário
+ * GET: Carrega as empresas que o usuário pode ver — as que ele é dono + as que um
+ * usuário master concedeu acesso (ver /usuarios). `isOwner` diz ao cliente quais ações
+ * (renomear, excluir, ativar como padrão, criar novas) ficam disponíveis: essas seguem
+ * restritas ao dono, mesmo com acesso completo aos dados (Precificação/Produtos/config).
  */
 export async function GET() {
   try {
     const session = await getSessionOrThrow();
     const userId = session.user.id;
 
-    const rows = await prisma.markupRuleset.findMany({
-      where: { userId },
-      orderBy: [{ isActive: "desc" }, { updatedAt: "desc" }],
-    });
+    const [owned, granted] = await Promise.all([
+      prisma.markupRuleset.findMany({ where: { userId }, orderBy: [{ isActive: "desc" }, { updatedAt: "desc" }] }),
+      prisma.empresaAccess.findMany({ where: { userId }, select: { empresaId: true } }),
+    ]);
 
-    if (rows.length === 0) {
+    const grantedIds = granted.map((g) => g.empresaId);
+    const grantedRows =
+      grantedIds.length > 0
+        ? await prisma.markupRuleset.findMany({ where: { id: { in: grantedIds } }, orderBy: { updatedAt: "desc" } })
+        : [];
+
+    // Autoprovisiona uma primeira empresa só para a própria conta master, na primeira
+    // vez que ela acessa — nunca para um usuário concedido, que só deve ver o que um
+    // master explicitamente compartilhou com ele.
+    if (owned.length === 0 && grantedRows.length === 0) {
+      if (session.user.role !== "MASTER") {
+        return NextResponse.json({ rulesets: [] });
+      }
       const created = await prisma.markupRuleset.create({
         data: {
           userId,
@@ -80,22 +96,30 @@ export async function GET() {
           data: defaultRuleSet() as any,
         },
       });
-      return NextResponse.json({ rulesets: [created] });
+      return NextResponse.json({ rulesets: [{ ...created, isOwner: true }] });
     }
 
-    return NextResponse.json({ rulesets: rows });
+    const rulesets = [
+      ...owned.map((r) => ({ ...r, isOwner: true })),
+      ...grantedRows.map((r) => ({ ...r, isOwner: false })),
+    ];
+
+    return NextResponse.json({ rulesets });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: error.message === "Unauthorized" ? 401 : 500 });
   }
 }
 
 /**
- * POST: Cria novo Ruleset
+ * POST: Cria nova empresa — só usuários MASTER (concedem acesso depois em /usuarios).
  */
 export async function POST(req: Request) {
   try {
     const session = await getSessionOrThrow();
     const userId = session.user.id;
+    if (session.user.role !== "MASTER") {
+      return NextResponse.json({ error: "Só um usuário master pode criar empresas" }, { status: 403 });
+    }
     const body = await req.json();
 
     const created = await prisma.markupRuleset.create({
@@ -114,7 +138,8 @@ export async function POST(req: Request) {
 }
 
 /**
- * PUT: Atualiza ou Ativa um Ruleset
+ * PUT: Atualiza (dono ou usuário com acesso concedido) ou renomeia/ativa como padrão
+ * (só o dono — essas são ações de administração da empresa, não do dia a dia).
  */
 export async function PUT(req: Request) {
   try {
@@ -125,12 +150,16 @@ export async function PUT(req: Request) {
 
     if (!id) return NextResponse.json({ error: "ID ausente" }, { status: 400 });
 
-    // ✅ Tópico C: Sempre incluir userId na busca para evitar edição de dados alheios
-    const existing = await prisma.markupRuleset.findFirst({
-      where: { id, userId }
-    });
+    const access = await getEmpresaAccess(userId, id);
+    if (!access) return NextResponse.json({ error: "Não encontrado" }, { status: 404 });
 
-    if (!existing) return NextResponse.json({ error: "Não encontrado" }, { status: 404 });
+    if (action === "activate" || action === "rename") {
+      if (!access.isOwner) {
+        return NextResponse.json({ error: "Só o dono da empresa pode fazer isso" }, { status: 403 });
+      }
+    }
+
+    const existing = await prisma.markupRuleset.findUniqueOrThrow({ where: { id } });
 
     if (action === "activate") {
       await prisma.$transaction([
@@ -139,7 +168,7 @@ export async function PUT(req: Request) {
           data: { isActive: false },
         }),
         prisma.markupRuleset.update({
-          where: { id, userId },
+          where: { id },
           data: { isActive: true },
         }),
       ]);
@@ -147,8 +176,16 @@ export async function PUT(req: Request) {
       return NextResponse.json({ ok: true });
     }
 
+    if (action === "rename") {
+      const renamed = await prisma.markupRuleset.update({
+        where: { id },
+        data: { name: body.name ?? existing.name },
+      });
+      return NextResponse.json({ updated: renamed });
+    }
+
     const updated = await prisma.markupRuleset.update({
-      where: { id, userId },
+      where: { id },
       data: {
         name: body.name ?? existing.name,
         data: body.data ? (normalizeData(body.data) as any) : existing.data,
@@ -166,7 +203,7 @@ export async function PUT(req: Request) {
 }
 
 /**
- * DELETE: Remove um Ruleset
+ * DELETE: Remove uma empresa — só o dono.
  */
 export async function DELETE(req: Request) {
   try {

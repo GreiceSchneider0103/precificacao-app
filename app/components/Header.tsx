@@ -7,9 +7,11 @@ import { SignOutButton } from "@/app/components/AuthClientButtons";
 export function Header({
   isLoggedIn,
   userName,
+  role,
 }: {
   isLoggedIn: boolean;
   userName?: string | null;
+  role?: "MASTER" | "MEMBER";
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
@@ -18,6 +20,7 @@ export function Header({
     { name: "Produtos", href: "/produtos" },
     { name: "Precificação", href: "/precificacao" },
     { name: "Configurações", href: "/configuracoes" },
+    ...(role === "MASTER" ? [{ name: "Usuários", href: "/usuarios" }] : []),
   ];
 
   if (!isLoggedIn) return null;

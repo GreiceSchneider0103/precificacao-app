@@ -52,6 +52,7 @@ type EmpresaRow = {
   updatedAt: string;
   tinyApiToken?: string | null;
   tinyLastSyncAt?: string | null;
+  isOwner?: boolean;
 };
 
 function num(v: any, fallback = 0) {
@@ -389,13 +390,15 @@ export default function ConfiguracoesPage() {
               Editar
             </button>
           )}
-          <button
-            onClick={activate}
-            className="rounded-full border px-5 py-2.5 text-sm font-semibold"
-            style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}
-          >
-            Usar como padrão
-          </button>
+          {selected?.isOwner !== false && (
+            <button
+              onClick={activate}
+              className="rounded-full border px-5 py-2.5 text-sm font-semibold"
+              style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}
+            >
+              Usar como padrão
+            </button>
+          )}
         </div>
       </div>
 
@@ -420,22 +423,25 @@ export default function ConfiguracoesPage() {
             <span className="text-xs" style={{ color: "var(--muted)" }}>{empresas.length} empresa{empresas.length === 1 ? "" : "s"} cadastrada{empresas.length === 1 ? "" : "s"}</span>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <input
-              value={renameText}
-              onChange={(e) => setRenameText(e.target.value)}
-              className="border rounded-lg px-3 py-2 text-sm" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
-              placeholder="Nome da empresa"
-            />
-            <button onClick={rename} className="px-3 py-2 rounded-lg border text-sm" style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}>
-              Renomear
-            </button>
-            <button onClick={removeEmpresa} className="px-3 py-2 rounded-lg border text-sm" style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}>
-              Excluir
-            </button>
-          </div>
+          {selected?.isOwner !== false && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                value={renameText}
+                onChange={(e) => setRenameText(e.target.value)}
+                className="border rounded-lg px-3 py-2 text-sm" style={{ background: "var(--input-bg)", color: "var(--input-text)", borderColor: "var(--border)" }}
+                placeholder="Nome da empresa"
+              />
+              <button onClick={rename} className="px-3 py-2 rounded-lg border text-sm" style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}>
+                Renomear
+              </button>
+              <button onClick={removeEmpresa} className="px-3 py-2 rounded-lg border text-sm" style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}>
+                Excluir
+              </button>
+            </div>
+          )}
         </div>
 
+        {selected?.isOwner !== false && (
         <div className="flex items-center gap-2 flex-wrap pt-2 border-t" style={{ borderColor: "var(--border)" }}>
           <input
             value={newName}
@@ -447,6 +453,7 @@ export default function ConfiguracoesPage() {
             Nova empresa (copia a atual)
           </button>
         </div>
+        )}
       </div>
 
       {/* Regime / UF / Imposto principal */}

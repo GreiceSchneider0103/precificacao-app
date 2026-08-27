@@ -33,9 +33,9 @@ export default async function RootLayout({
       style={{ background: "var(--bg)", color: "var(--text)", fontFamily: "var(--font-sans), system-ui, sans-serif" }}
     >
       {/* Header com container e espaçamento */}
-      {session?.user && (
+      {session?.user?.approved && (
         <div className="mx-auto max-w-6xl px-4 pt-6">
-          <Header isLoggedIn={true} userName={session.user.name} />
+          <Header isLoggedIn={true} userName={session.user.name} role={session.user.role} />
         </div>
       )}
 

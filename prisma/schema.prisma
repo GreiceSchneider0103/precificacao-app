@@ -23,7 +23,10 @@ model User {
   image         String?
   phone         String?
   passwordHash  String?
-  role          UserRole  @default(MASTER)
+  role          UserRole  @default(MEMBER)
+  // Cadastros novos (auto-registro em /cadastro) começam sem acesso, até um usuário
+  // MASTER aprovar e conceder acesso a empresa(s) na tela de administração de usuários.
+  approved      Boolean   @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -34,6 +37,7 @@ model User {
   promotions    Promotion[]
   history       PricingHistory[]
   markupRules   MarkupRuleset[]
+  empresaAccess EmpresaAccess[]
 }
 
 model Account {
@@ -96,11 +100,28 @@ model MarkupRuleset {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   products Product[]
+  access   EmpresaAccess[]
 
   @@index([userId])
   @@map("markup_settings_rulesets_v1") // Mantém o nome da tabela física
+}
+
+// Concede a um usuário (que não é o dono da empresa) acesso completo a uma empresa —
+// Precificação, Produtos e Configurações dela, dados compartilhados com o dono. Só um
+// usuário MASTER cria empresas e concede/revoga esses acessos (ver /usuarios).
+model EmpresaAccess {
+  id        String   @id @default(cuid())
+  userId    String
+  empresaId String
+  createdAt DateTime @default(now())
+
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  empresa MarkupRuleset @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, empresaId])
+  @@index([empresaId])
 }
 
 // --- PRODUTOS E LOGÍSTICA ---

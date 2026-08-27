@@ -29,7 +29,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!user || !user.passwordHash) return null;
         const ok = await compare(password, user.passwordHash);
         if (!ok) return null;
-        return { id: user.id, email: user.email, name: user.name ?? "", role: user.role };
+        // Login funciona normalmente mesmo sem aprovação — quem trava o acesso é o
+        // middleware, redirecionando para /pendente. Assim a pessoa sabe que a conta
+        // existe e está aguardando aprovação, em vez de "senha inválida".
+        return { id: user.id, email: user.email, name: user.name ?? "", role: user.role, approved: user.approved };
       },
     }),
   ],
@@ -56,7 +59,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
 
     async jwt({ token, user, trigger, session }) {
-      if (user) { token.id = user.id; token.email = user.email; token.role = (user as { role?: string }).role; }
+      if (user) {
+        token.id = user.id;
+        token.email = user.email;
+        token.role = (user as { role?: string }).role;
+        token.approved = (user as { approved?: boolean }).approved;
+      }
       if (trigger === "update" && session) return { ...token, ...(session as Record<string, unknown>) };
       return token;
     },
@@ -64,7 +72,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async session({ session, token }) {
       if (session.user && token.id) {
         session.user.id = token.id as string;
-        session.user.role = (token.role as "MASTER" | "MEMBER" | undefined) ?? "MASTER";
+        // Fail-closed em role: token sem role reconhecível vira MEMBER (mais restritivo),
+        // não MASTER.
+        session.user.role = (token.role as "MASTER" | "MEMBER" | undefined) ?? "MEMBER";
+        // `approved` é campo novo: sessões já ativas antes deste recurso existir (só a
+        // conta original, já confiável) não têm esse campo no token ainda — tratar
+        // `undefined` como aprovado evita trancar quem já usava o sistema fora do ar até
+        // relogar. Só `false` explícito (contas novas, que authorize()/adapter já
+        // preenchem de verdade) bloqueia de fato.
+        session.user.approved = token.approved !== false;
       }
       return session;
     },
@@ -76,6 +92,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
 declare module "next-auth" {
   interface Session {
-    user: { id: string; name?: string | null; email?: string | null; image?: string | null; role?: "MASTER" | "MEMBER" };
+    user: {
+      id: string;
+      name?: string | null;
+      email?: string | null;
+      image?: string | null;
+      role?: "MASTER" | "MEMBER";
+      approved?: boolean;
+    };
   }
 }

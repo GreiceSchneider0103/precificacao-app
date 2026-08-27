@@ -94,7 +94,8 @@ export default function CadastroPage() {
 
           {ok ? (
             <div className="rounded-xl border px-4 py-2 text-sm" style={{ borderColor: "var(--good-soft)", background: "var(--good-soft)", color: "var(--good)" }}>
-              Conta criada. Volte e faça login.
+              Conta criada! Um administrador precisa aprovar seu acesso antes que você possa entrar — você pode
+              fazer login para acompanhar, mas só verá as empresas depois de aprovado(a).
             </div>
           ) : null}
 

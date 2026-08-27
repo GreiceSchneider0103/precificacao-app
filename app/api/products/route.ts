@@ -3,14 +3,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { upsertProductBySku } from "@/lib/db/products";
+import { getEmpresaAccess } from "@/lib/access";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 /**
- * GET: Lista produtos do usuário logado. Aceita ?empresaId= para filtrar por empresa
- * (use "none" para listar só os produtos legados sem empresa atribuída). Sem o
- * parâmetro, retorna todos os produtos da conta (compatibilidade retroativa).
+ * GET: Lista produtos. Aceita ?empresaId= para filtrar por empresa (use "none" para os
+ * produtos legados sem empresa atribuída, sempre restritos ao próprio dono). Produtos de
+ * uma empresa real são dados COMPARTILHADOS entre o dono e quem tiver acesso concedido —
+ * por isso, com empresaId real, a busca não filtra mais por userId, só por acesso.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -22,12 +24,17 @@ export async function GET(request: NextRequest) {
     }
 
     const empresaId = new URL(request.url).searchParams.get("empresaId");
-    const where =
-      empresaId === "none"
-        ? { userId, empresaId: null }
-        : empresaId
-        ? { userId, empresaId }
-        : { userId };
+
+    let where: { userId?: string; empresaId?: string | null; deletedAt: null };
+    if (empresaId === "none") {
+      where = { userId, empresaId: null, deletedAt: null };
+    } else if (empresaId) {
+      const access = await getEmpresaAccess(userId, empresaId);
+      if (!access) return NextResponse.json({ error: "Você não tem acesso a esta empresa" }, { status: 403 });
+      where = { empresaId, deletedAt: null };
+    } else {
+      where = { userId, deletedAt: null };
+    }
 
     const products = await prisma.product.findMany({
       where,
@@ -58,7 +65,7 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST: Cria ou atualiza um produto (upsert por userId + sku)
+ * POST: Cria ou atualiza um produto (upsert por dono-da-empresa + empresaId + sku).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -94,9 +101,17 @@ export async function POST(request: NextRequest) {
     const skuNorm = sku.trim().toUpperCase();
     const empresaIdNorm: string | null = empresaId ? String(empresaId) : null;
 
-    // ✅ upsert: cria ou atualiza pelo trio userId + empresaId + sku
+    // Produto de empresa real: pertence à conta DONA da empresa (dado compartilhado),
+    // não a quem estiver logado no momento salvando.
+    let ownerUserId = userId;
+    if (empresaIdNorm !== null) {
+      const access = await getEmpresaAccess(userId, empresaIdNorm);
+      if (!access) return NextResponse.json({ error: "Você não tem acesso a esta empresa" }, { status: 403 });
+      ownerUserId = access.ownerUserId;
+    }
+
     const product = await upsertProductBySku({
-      userId,
+      userId: ownerUserId,
       empresaId: empresaIdNorm,
       sku: skuNorm,
       name: name.trim(),
@@ -114,7 +129,7 @@ export async function POST(request: NextRequest) {
     // Unique constraint — SKU duplicado (raro com upsert, mas defensivo)
     if (error?.code === "P2002") {
       return NextResponse.json(
-        { error: "Este SKU já existe na sua conta." },
+        { error: "Este SKU já existe nesta empresa." },
         { status: 409 }
       );
     }
@@ -124,7 +139,7 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * DELETE: Remove um produto pelo id
+ * DELETE: Remove um produto pelo id, ou todos de uma empresa (?empresaId=X&all=true).
  */
 export async function DELETE(request: NextRequest) {
   try {
@@ -146,8 +161,13 @@ export async function DELETE(request: NextRequest) {
       if (empresaParam === null) {
         return NextResponse.json({ error: "empresaId é obrigatório" }, { status: 400 });
       }
-      const empresaId = empresaParam === "none" ? null : empresaParam;
-      const result = await prisma.product.deleteMany({ where: { userId, empresaId } });
+      if (empresaParam === "none") {
+        const result = await prisma.product.deleteMany({ where: { userId, empresaId: null } });
+        return NextResponse.json({ success: true, deleted: result.count });
+      }
+      const access = await getEmpresaAccess(userId, empresaParam);
+      if (!access) return NextResponse.json({ error: "Você não tem acesso a esta empresa" }, { status: 403 });
+      const result = await prisma.product.deleteMany({ where: { empresaId: empresaParam } });
       return NextResponse.json({ success: true, deleted: result.count });
     }
 
@@ -155,12 +175,15 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "ID do produto é obrigatório" }, { status: 400 });
     }
 
-    // ✅ garante que só deleta produtos do próprio usuário
-    const product = await prisma.product.findFirst({
-      where: { id, userId },
-    });
-
+    const product = await prisma.product.findUnique({ where: { id } });
     if (!product) {
+      return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 });
+    }
+
+    if (product.empresaId) {
+      const access = await getEmpresaAccess(userId, product.empresaId);
+      if (!access) return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 });
+    } else if (product.userId !== userId) {
       return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 });
     }
 
@@ -174,7 +197,8 @@ export async function DELETE(request: NextRequest) {
 }
 
 /**
- * PUT: Substitui toda a base de produtos do usuário (bulk upsert)
+ * PUT: Upsert em lote — usada para salvar só os produtos que de fato mudaram (não a base
+ * inteira), ver ProdutosClient.tsx. Cada item pertence à conta DONA da sua empresa.
  */
 export async function PUT(request: NextRequest) {
   try {
@@ -186,23 +210,36 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json() as { products?: unknown[] };
-    const products = body?.products;
+    const products = body?.products as
+      | { sku: string; name: string; cmv: number; mlb?: string | null; empresaId?: string | null }[]
+      | undefined;
 
     if (!Array.isArray(products)) {
       return NextResponse.json({ error: "Lista de produtos inválida" }, { status: 400 });
     }
 
-    // Upsert de cada produto da lista
+    // Resolve o dono real de cada empresaId distinto presente no lote uma única vez
+    // (evita repetir a checagem de acesso a cada item quando o lote inteiro é da mesma
+    // empresa, o caso comum).
+    const ownerByEmpresaId = new Map<string, string>();
+    for (const p of products) {
+      const empresaId = p.empresaId ? String(p.empresaId) : null;
+      if (empresaId === null || ownerByEmpresaId.has(empresaId)) continue;
+      const access = await getEmpresaAccess(userId, empresaId);
+      if (!access) return NextResponse.json({ error: "Você não tem acesso a uma das empresas enviadas" }, { status: 403 });
+      ownerByEmpresaId.set(empresaId, access.ownerUserId);
+    }
+
     await Promise.all(
       products.map((p) => {
-        const prod = p as { sku: string; name: string; cmv: number; mlb?: string | null; empresaId?: string | null };
+        const empresaId = p.empresaId ? String(p.empresaId) : null;
         return upsertProductBySku({
-          userId,
-          empresaId: prod.empresaId ? String(prod.empresaId) : null,
-          sku: prod.sku.trim().toUpperCase(),
-          name: prod.name.trim(),
-          cmv: Number(prod.cmv),
-          mlb: prod.mlb ? String(prod.mlb).trim() : null,
+          userId: empresaId ? ownerByEmpresaId.get(empresaId)! : userId,
+          empresaId,
+          sku: p.sku.trim().toUpperCase(),
+          name: p.name.trim(),
+          cmv: Number(p.cmv),
+          mlb: p.mlb ? String(p.mlb).trim() : null,
         });
       })
     );

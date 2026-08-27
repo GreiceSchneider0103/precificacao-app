@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { runTinySyncBatch } from "@/lib/tiny";
+import { getEmpresaAccess } from "@/lib/access";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -85,10 +86,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "empresaId é obrigatório" }, { status: 400 });
     }
 
-    const empresa = await prisma.markupRuleset.findFirst({ where: { id: empresaId, userId } });
-    if (!empresa) {
+    const access = await getEmpresaAccess(userId, empresaId);
+    if (!access) {
       return NextResponse.json({ error: "Empresa não encontrada" }, { status: 404 });
     }
+    const empresa = await prisma.markupRuleset.findUniqueOrThrow({ where: { id: empresaId } });
     if (!empresa.tinyApiToken) {
       return NextResponse.json(
         { error: "Configure o token do Tiny para esta empresa em Configurações" },
