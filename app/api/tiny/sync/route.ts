@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    const body = (await request.json()) as { empresaId?: string; all?: boolean };
+    const body = (await request.json()) as { empresaId?: string; all?: boolean; skipEmpresaIds?: string[] };
 
     if (body.all) {
       if (session?.user?.role !== "MASTER") {
@@ -38,8 +38,13 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      // skipEmpresaIds: empresas já marcadas done:true numa rodada anterior desta mesma
+      // sincronização — sem isso, o cliente chamaria esta rota em loop até TODAS as
+      // empresas terminarem, e a cada rodada empresas já prontas seriam re-sincronizadas
+      // à toa, desperdiçando cota do Tiny (e arriscando bloquear de novo quem já estava ok).
+      const skipEmpresaIds = Array.isArray(body.skipEmpresaIds) ? body.skipEmpresaIds.filter((id) => typeof id === "string") : [];
       const empresas = await prisma.markupRuleset.findMany({
-        where: { userId, tinyApiToken: { not: null } },
+        where: { userId, tinyApiToken: { not: null }, id: { notIn: skipEmpresaIds } },
         select: { id: true, name: true },
       });
 
@@ -50,8 +55,26 @@ export async function POST(request: NextRequest) {
       const perEmpresaBudget = splitBudget(MANUAL_BUDGET_MS, empresas.length);
       const results = [];
       for (const empresa of empresas) {
-        const r = await runTinySyncBatch(empresa.id, { budgetMs: perEmpresaBudget });
-        results.push({ empresaId: empresa.id, name: empresa.name, ...r });
+        // Isola erro por empresa: se uma falhar (ex: token inválido), as demais ainda
+        // precisam ser sincronizadas nesta rodada — sem isso, uma exceção aqui derrubava
+        // a rota inteira com 500, perdendo o progresso já feito e quebrando a soma de
+        // processed/total no cliente (campos ausentes viravam NaN).
+        try {
+          const r = await runTinySyncBatch(empresa.id, { budgetMs: perEmpresaBudget });
+          results.push({ empresaId: empresa.id, name: empresa.name, ...r });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          results.push({
+            empresaId: empresa.id,
+            name: empresa.name,
+            processed: 0,
+            total: 0,
+            updated: 0,
+            done: false,
+            blocked: false,
+            errors: [{ sku: "(empresa)", message }],
+          });
+        }
       }
 
       return NextResponse.json({ mode: "all", done: results.every((r) => r.done), empresas: results });

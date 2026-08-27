@@ -699,6 +699,10 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
     let blockedWaits = 0;
     let gaveUpDueToBlock = false;
     const allErrors: TinySyncError[] = [];
+    // Empresas já marcadas done:true numa rodada anterior (modo "todas") — evita
+    // re-sincronizá-las à toa a cada rodada seguinte só porque outra empresa ainda não
+    // terminou, o que desperdiçaria cota do Tiny e podia bloquear de novo quem já estava ok.
+    const doneEmpresaIds = new Set<string>();
     setSyncState({ running: true, processed: 0, total: 0, mode: all ? "all" : "single" });
     setSyncErrorSummary("");
 
@@ -707,7 +711,7 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
         const res = await fetch("/api/tiny/sync", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(all ? { all: true } : { empresaId: selectedEmpresaId }),
+          body: JSON.stringify(all ? { all: true, skipEmpresaIds: Array.from(doneEmpresaIds) } : { empresaId: selectedEmpresaId }),
         });
         const data = await res.json();
         if (!res.ok) {
@@ -723,6 +727,7 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
           processedSoFar += empresasResult.reduce((s, e) => s + e.processed, 0);
           updatedTotal += empresasResult.reduce((s, e) => s + ((e as { updated?: number }).updated ?? 0), 0);
           for (const e of empresasResult) allErrors.push(...(e.errors ?? []));
+          for (const e of empresasResult) if (e.done) doneEmpresaIds.add(e.empresaId);
           done = Boolean(data.done);
           blockedNow = empresasResult.some((e) => e.blocked);
         } else {
@@ -751,6 +756,10 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
           }
           setStatus(`Tiny bloqueou temporariamente o acesso à API (excesso de acessos) — continuando automaticamente em 5 minutos…`);
           await new Promise((resolve) => setTimeout(resolve, 5 * 60 * 1000));
+        } else if (blockedWaits > 0) {
+          // Limpa o aviso de bloqueio de uma rodada anterior: sem isso, ele ficava preso
+          // na tela mesmo depois da sincronização já ter voltado ao normal.
+          setStatus("");
         }
       }
 
