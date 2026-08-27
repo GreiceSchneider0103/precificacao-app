@@ -235,8 +235,8 @@ async function loadFromDb(empresaId: string) {
   return (data?.products ?? []) as Product[];
 }
 
-async function saveToDb(nextProducts: Product[], empresaId: string) {
-  const tagged = nextProducts.map((p) => ({
+async function saveToDb(itemsToUpsert: Product[], empresaId: string) {
+  const tagged = itemsToUpsert.map((p) => ({
     ...p,
     empresaId: empresaId === NONE_EMPRESA ? null : empresaId,
   }));
@@ -333,11 +333,17 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
   }, [empresasLoaded, selectedEmpresaId]);
 
   // Helper: aplica e salva
-  async function applyAndSave(nextProducts: Product[], successMsg?: string) {
+  // itemsToUpsert: só os produtos que de fato mudaram, não a lista inteira exibida na
+  // tela. Reenviar todo mundo a cada edição fazia uma sincronização do Tiny em
+  // andamento (que grava CMV direto no banco, sem passar pelo estado local) ser
+  // sobrescrita de volta com valores antigos assim que o usuário editava/adicionava
+  // QUALQUER outro produto — bastava um clique em "Adicionar produto" durante os
+  // ~379 SKUs sincronizando para desfazer o progresso todo.
+  async function applyAndSave(nextProducts: Product[], itemsToUpsert: Product[], successMsg?: string) {
     setProducts(nextProducts);
     setSaving(true);
     try {
-      await saveToDb(nextProducts, selectedEmpresaId);
+      await saveToDb(itemsToUpsert, selectedEmpresaId);
       if (successMsg) toast(successMsg);
     } catch (e) {
       console.error(e);
@@ -377,6 +383,7 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
 
     const now = new Date().toISOString();
     const map = new Map(products.map((p) => [normalizeSku(p.sku), p]));
+    const touched: Product[] = [];
 
     for (const it of items) {
       const sku = normalizeSku(it.sku);
@@ -392,23 +399,27 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
       const cmv2 = Math.round((nextCmv || 0) * 100) / 100;
 
       if (prevP) {
-        map.set(sku, {
+        const merged = {
           ...prevP,
           name: nextName || prevP.name,
           cmv: cmv2 > 0 ? cmv2 : prevP.cmv,
           mlb: nextMlb || prevP.mlb,
           updatedAt: now,
-        });
+        };
+        map.set(sku, merged);
+        touched.push(merged);
         updated++;
       } else {
-        map.set(sku, {
+        const created: Product = {
           sku,
           name: nextName || sku,
           cmv: cmv2 || 0,
           mlb: nextMlb || null,
           empresaId: selectedEmpresaId === NONE_EMPRESA ? null : selectedEmpresaId,
           updatedAt: now,
-        });
+        };
+        map.set(sku, created);
+        touched.push(created);
         added++;
       }
     }
@@ -422,7 +433,7 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
       } catch {}
     }
 
-    applyAndSave(nextProducts, `Importação concluída: +${added} novos, ${updated} atualizados, ${skipped} ignorados.`);
+    applyAndSave(nextProducts, touched, `Importação concluída: +${added} novos, ${updated} atualizados, ${skipped} ignorados.`);
   }
 
   function addManualProduct() {
@@ -457,7 +468,7 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
     setNewCmv("");
     setNewMlb("");
 
-    applyAndSave(nextProducts, `Produto ${sku} adicionado/atualizado.`);
+    applyAndSave(nextProducts, [next], `Produto ${sku} adicionado/atualizado.`);
   }
 
   function onDownloadBase() {
@@ -611,14 +622,18 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
     // Se a empresa do produto mudou para uma diferente da selecionada na tela, ele some
     // da lista atual (passa a pertencer a outra empresa) — igual a mover de pasta.
     const staysVisible = empresaId === (selectedEmpresaId === NONE_EMPRESA ? null : selectedEmpresaId);
+    const edited = products.find((p) => p.sku === sku);
+    const updatedProduct: Product | null = edited
+      ? { ...edited, name, cmv, mlb: mlb || null, empresaId, updatedAt: new Date().toISOString() }
+      : null;
     const nextProducts = staysVisible
-      ? products.map((p) => (p.sku === sku ? { ...p, name, cmv, mlb: mlb || null, empresaId, updatedAt: new Date().toISOString() } : p))
+      ? products.map((p) => (p.sku === sku ? (updatedProduct ?? p) : p))
       : products.filter((p) => p.sku !== sku);
 
     setEditSku(null);
 
     if (staysVisible) {
-      applyAndSave(nextProducts, `SKU ${sku} atualizado.`);
+      applyAndSave(nextProducts, updatedProduct ? [updatedProduct] : [], `SKU ${sku} atualizado.`);
     } else {
       // Produto mudou de empresa: salva com o empresaId novo diretamente (não com o da tela).
       setProducts(nextProducts);

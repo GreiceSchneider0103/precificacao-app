@@ -314,6 +314,10 @@ export default function ConfiguracoesPage() {
       setStatus("❌ Defina outra empresa como padrão antes de excluir esta.");
       return;
     }
+    const ok = window.confirm(
+      `Excluir a empresa "${row?.name ?? ""}"? Isso apaga a configuração de canais/impostos dela — não dá pra desfazer. Produtos já cadastrados nela ficam sem empresa (não são apagados).`
+    );
+    if (!ok) return;
     setStatus("Excluindo...");
     const res = await fetch(`/api/settings/rulesets?id=${encodeURIComponent(selectedId)}`, { method: "DELETE" });
     const json = await res.json();
