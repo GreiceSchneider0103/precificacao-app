@@ -90,10 +90,14 @@ describe("tinySearchProdutoBySku", () => {
     expect(result).toBeNull();
   });
 
-  it("retorna null quando o Tiny responde status de erro", async () => {
+  it("lança erro com o motivo do Tiny quando o status não é OK (ex: token inválido)", async () => {
+    mockFetchOnce({ retorno: { status: "Erro", erros: [{ erro: "Token inválido" }] } });
+    await expect(tinySearchProdutoBySku("token", "ABC-123")).rejects.toThrow("Token inválido");
+  });
+
+  it("lança erro genérico quando o status não é OK e o Tiny não detalha o motivo", async () => {
     mockFetchOnce({ retorno: { status: "Erro" } });
-    const result = await tinySearchProdutoBySku("token", "ABC-123");
-    expect(result).toBeNull();
+    await expect(tinySearchProdutoBySku("token", "ABC-123")).rejects.toThrow(/recusou a pesquisa/);
   });
 
   it("lança erro quando a resposta HTTP não é ok", async () => {

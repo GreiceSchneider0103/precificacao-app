@@ -41,13 +41,24 @@ type TinyProdutoDetalhe = TinyProdutoResumo & {
   preco_custo_medio?: string | number;
 };
 
+type TinyRetornoBase = { status?: string; erros?: { erro?: string }[] };
+
 type TinyPesquisaResponse = {
-  retorno?: { status?: string; produtos?: { produto?: TinyProdutoResumo }[] };
+  retorno?: TinyRetornoBase & { produtos?: { produto?: TinyProdutoResumo }[] };
 };
 
 type TinyObterResponse = {
-  retorno?: { status?: string; produto?: TinyProdutoDetalhe };
+  retorno?: TinyRetornoBase & { produto?: TinyProdutoDetalhe };
 };
+
+// Tiny normalmente detalha o motivo em retorno.erros quando status != "OK" (token
+// inválido, sem permissão, parâmetro errado etc.) — expõe isso em vez de tratar como
+// "SKU não encontrado", que é um caso bem diferente (e não deveria acontecer para TODOS
+// os SKUs de uma vez, ao contrário de um problema de token/permissão).
+function tinyErrorMessage(retorno: TinyRetornoBase | undefined, fallback: string): string {
+  const erros = (retorno?.erros ?? []).map((e) => e.erro).filter((e): e is string => !!e);
+  return erros.length > 0 ? erros.join("; ") : fallback;
+}
 
 /**
  * Busca o id interno do Tiny para um SKU. A busca (`pesquisa`) do Tiny é textual/fuzzy,
@@ -58,7 +69,9 @@ export async function tinySearchProdutoBySku(token: string, sku: string): Promis
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Tiny respondeu ${res.status} ao pesquisar SKU ${sku}`);
   const json = (await res.json()) as TinyPesquisaResponse;
-  if (json.retorno?.status !== "OK") return null;
+  if (json.retorno?.status !== "OK") {
+    throw new Error(tinyErrorMessage(json.retorno, `Tiny recusou a pesquisa do SKU ${sku} (verifique o token)`));
+  }
 
   const skuNorm = sku.trim().toUpperCase();
   const match = (json.retorno.produtos ?? [])
@@ -84,7 +97,10 @@ export async function tinyObterProduto(token: string, id: string): Promise<{ cmv
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Tiny respondeu ${res.status} ao obter produto ${id}`);
   const json = (await res.json()) as TinyObterResponse;
-  if (json.retorno?.status !== "OK" || !json.retorno.produto) return null;
+  if (json.retorno?.status !== "OK") {
+    throw new Error(tinyErrorMessage(json.retorno, `Tiny recusou ao obter o produto ${id} (verifique o token)`));
+  }
+  if (!json.retorno.produto) return null;
 
   return {
     cmv: extractCostFromTinyProduto(json.retorno.produto),
