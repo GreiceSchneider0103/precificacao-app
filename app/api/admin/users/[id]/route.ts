@@ -1,7 +1,10 @@
 // app/api/admin/users/[id]/route.ts
 //
 // Só para usuários MASTER: aprova/recusa cadastros e concede ou revoga acesso a
-// empresas de um usuário MEMBER.
+// empresas de outro usuário — inclusive outro MASTER (útil quando há mais de uma conta
+// master: promover alguém a master não dá acesso automático às empresas de OUTRO master,
+// já que cada empresa pertence a um dono específico — precisa ser concedido aqui, igual a
+// um MEMBER). Só a exclusão da conta em si continua bloqueada para masters (ver DELETE).
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -21,9 +24,11 @@ async function requireMaster() {
 
 /**
  * PATCH { approved?: boolean, empresaIds?: string[] }
- * Aprova/recusa o cadastro e/ou define exatamente a lista de empresas às quais o usuário
- * tem acesso (substitui a lista atual pela enviada). As empresas precisam pertencer ao
- * próprio master que está fazendo a chamada.
+ * Aprova/recusa o cadastro e/ou define exatamente a lista de empresas — DENTRE AS DO
+ * PRÓPRIO MASTER que está chamando — às quais o usuário tem acesso. Só mexe nas
+ * concessões referentes a empresas deste master: se o usuário também tiver acesso
+ * concedido por OUTRO master (caso normal quando há mais de uma conta master), essas
+ * concessões ficam intactas.
  */
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const guard = await requireMaster();
@@ -34,24 +39,21 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const { id: targetUserId } = await context.params;
     const target = await prisma.user.findUnique({ where: { id: targetUserId } });
     if (!target) return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
-    if (target.role === "MASTER") {
-      return NextResponse.json({ error: "Não é possível gerenciar o acesso de outro usuário master" }, { status: 400 });
-    }
 
     const body = (await request.json()) as { approved?: boolean; empresaIds?: string[] };
 
     if (Array.isArray(body.empresaIds)) {
       const empresaIds = body.empresaIds.filter((id) => typeof id === "string");
-      const owned = await prisma.markupRuleset.findMany({
-        where: { id: { in: empresaIds }, userId: masterId },
-        select: { id: true },
-      });
-      if (owned.length !== empresaIds.length) {
+      const myEmpresas = await prisma.markupRuleset.findMany({ where: { userId: masterId }, select: { id: true } });
+      const myEmpresaIds = myEmpresas.map((e) => e.id);
+      if (!empresaIds.every((id) => myEmpresaIds.includes(id))) {
         return NextResponse.json({ error: "Uma ou mais empresas não pertencem à sua conta" }, { status: 400 });
       }
 
       await prisma.$transaction([
-        prisma.empresaAccess.deleteMany({ where: { userId: targetUserId, empresaId: { notIn: empresaIds } } }),
+        prisma.empresaAccess.deleteMany({
+          where: { userId: targetUserId, empresaId: { in: myEmpresaIds, notIn: empresaIds } },
+        }),
         ...empresaIds.map((empresaId) =>
           prisma.empresaAccess.upsert({
             where: { userId_empresaId: { userId: targetUserId, empresaId } },

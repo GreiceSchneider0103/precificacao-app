@@ -34,12 +34,18 @@ export function UsuariosClient() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Erro ao carregar usuários");
       const list = (data.users ?? []) as UserRow[];
+      const owned = (data.empresasOwned ?? []) as EmpresaRow[];
       setUsers(list);
-      setEmpresasOwned((data.empresasOwned ?? []) as EmpresaRow[]);
+      setEmpresasOwned(owned);
+      // Um usuário pode ter acesso concedido por OUTRO master também — essas concessões
+      // não aparecem como chip aqui (só as empresas do master logado), então nem entram
+      // no estado de seleção: o servidor já protege essas concessões alheias por conta
+      // própria, mas evitar rastreá-las aqui impede reenviá-las sem querer.
+      const ownedIds = new Set(owned.map((e) => e.id));
       setSelection((prev) => {
         const next = { ...prev };
         for (const u of list) {
-          if (!next[u.id]) next[u.id] = new Set(u.empresaIds);
+          if (!next[u.id]) next[u.id] = new Set(u.empresaIds.filter((id) => ownedIds.has(id)));
         }
         return next;
       });
@@ -208,15 +214,17 @@ export function UsuariosClient() {
                       >
                         Aprovar
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => removeUser(u)}
-                        disabled={savingId === u.id}
-                        className="rounded-full border px-5 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-                        style={{ borderColor: "var(--crit)", color: "var(--crit)" }}
-                      >
-                        Recusar
-                      </button>
+                      {u.role !== "MASTER" && (
+                        <button
+                          type="button"
+                          onClick={() => removeUser(u)}
+                          disabled={savingId === u.id}
+                          className="rounded-full border px-5 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                          style={{ borderColor: "var(--crit)", color: "var(--crit)" }}
+                        >
+                          Recusar
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -233,8 +241,24 @@ export function UsuariosClient() {
                 {aprovados.map((u) => (
                   <div key={u.id} className="rounded-2xl border p-4 space-y-3" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
                     <div>
-                      <p className="font-semibold">{u.name || "(sem nome)"}</p>
+                      <p className="font-semibold flex items-center gap-2">
+                        {u.name || "(sem nome)"}
+                        {u.role === "MASTER" && (
+                          <span
+                            className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                            style={{ background: "var(--surface-soft)", color: "var(--muted2)" }}
+                          >
+                            master
+                          </span>
+                        )}
+                      </p>
                       <p className="text-sm" style={{ color: "var(--muted)" }}>{u.email}</p>
+                      {u.role === "MASTER" && (
+                        <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>
+                          Outra conta master — já tem acesso total por conta própria; marque abaixo só as suas
+                          empresas às quais ela também deve ter acesso.
+                        </p>
+                      )}
                     </div>
 
                     <EmpresaPicker
@@ -253,15 +277,17 @@ export function UsuariosClient() {
                       >
                         Salvar acesso
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => removeUser(u)}
-                        disabled={savingId === u.id}
-                        className="rounded-full border px-5 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-                        style={{ borderColor: "var(--crit)", color: "var(--crit)" }}
-                      >
-                        Remover usuário
-                      </button>
+                      {u.role !== "MASTER" && (
+                        <button
+                          type="button"
+                          onClick={() => removeUser(u)}
+                          disabled={savingId === u.id}
+                          className="rounded-full border px-5 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                          style={{ borderColor: "var(--crit)", color: "var(--crit)" }}
+                        >
+                          Remover usuário
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}

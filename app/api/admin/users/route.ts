@@ -1,7 +1,10 @@
 // app/api/admin/users/route.ts
 //
-// Só para usuários MASTER: lista as contas cadastradas (pendentes e já aprovadas) e as
-// empresas do próprio master, para montar a tela de aprovação/concessão de acesso.
+// Só para usuários MASTER: lista as contas cadastradas (pendentes e já aprovadas,
+// inclusive outras contas master) e as empresas do próprio master, para montar a tela de
+// aprovação/concessão de acesso. Outra conta master aparece aqui porque promover alguém
+// a master não dá acesso automático às empresas de UM master diferente — cada uma
+// pertence a um dono específico e precisa ser concedida, igual a um MEMBER.
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -20,10 +23,7 @@ export async function GET() {
 
     const [users, empresasOwned] = await Promise.all([
       prisma.user.findMany({
-        // Outras contas MASTER (ex: alguém que já tinha logado antes deste recurso
-        // existir, quando toda conta nova virava master) nunca podem ser geridas por
-        // aqui — mostrá-las só gera um botão que sempre falha. Fica de fora da lista.
-        where: { id: { not: session.user.id }, role: "MEMBER" },
+        where: { id: { not: session.user.id } },
         select: {
           id: true,
           name: true,
