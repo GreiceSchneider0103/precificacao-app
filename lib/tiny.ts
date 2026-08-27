@@ -22,6 +22,17 @@ export class TinyRateLimitError extends Error {}
 
 const RATE_LIMIT_PATTERN = /limite de requisi|muitas requisi|too many requests|rate limit|excedeu o limite/i;
 
+// Bloqueio "duro" de acessos do Tiny (cota da API excedida) — mensagem real observada:
+// "API Bloqueada - Excedido o número de acessos a API, aguarde alguns minutos e tente
+// novamente". Diferente de um 429 pontual, aqui TODAS as chamadas seguintes falham do
+// mesmo jeito por alguns minutos: insistir com retry curto só desperdiça tentativas (foi
+// o que aconteceu quando ~250 SKUs falharam de uma vez, todos com esse mesmo motivo).
+// Por isso não tenta de novo — aborta a rodada inteira na hora e deixa a próxima chamada
+// (o botão manual esperando mais tempo, ou o próximo elo da corrente do cron) continuar.
+export class TinyApiBlockedError extends Error {}
+
+const API_BLOCKED_PATTERN = /api bloqueada|excedido o n.mero de acessos|aguarde alguns minutos/i;
+
 export type TinySyncError = { sku: string; message: string };
 
 export type TinySyncBatchResult = {
@@ -30,6 +41,9 @@ export type TinySyncBatchResult = {
   updated: number;
   errors: TinySyncError[];
   done: boolean;
+  // true = parou cedo porque o Tiny bloqueou o acesso à API (precisa esperar alguns
+  // minutos); diferente de `done: false` por orçamento de tempo esgotado normalmente.
+  blocked: boolean;
 };
 
 function sleep(ms: number) {
@@ -80,6 +94,7 @@ export async function tinySearchProdutoBySku(token: string, sku: string): Promis
   const json = (await res.json()) as TinyPesquisaResponse;
   if (json.retorno?.status !== "OK") {
     const message = tinyErrorMessage(json.retorno, `Tiny recusou a pesquisa do SKU ${sku} (verifique o token)`);
+    if (API_BLOCKED_PATTERN.test(message)) throw new TinyApiBlockedError(message);
     if (RATE_LIMIT_PATTERN.test(message)) throw new TinyRateLimitError(message);
     throw new Error(message);
   }
@@ -111,6 +126,7 @@ export async function tinyObterProduto(token: string, id: string): Promise<{ cmv
   const json = (await res.json()) as TinyObterResponse;
   if (json.retorno?.status !== "OK") {
     const message = tinyErrorMessage(json.retorno, `Tiny recusou ao obter o produto ${id} (verifique o token)`);
+    if (API_BLOCKED_PATTERN.test(message)) throw new TinyApiBlockedError(message);
     if (RATE_LIMIT_PATTERN.test(message)) throw new TinyRateLimitError(message);
     throw new Error(message);
   }
@@ -159,6 +175,7 @@ export async function runTinySyncBatch(empresaId: string, opts: { budgetMs: numb
   const start = Date.now();
   let processed = 0;
   let updated = 0;
+  let blocked = false;
   const errors: TinySyncError[] = [];
 
   for (const product of products) {
@@ -166,8 +183,9 @@ export async function runTinySyncBatch(empresaId: string, opts: { budgetMs: numb
 
     // Limite de requisições do Tiny (HTTP 429 ou texto "limite excedido") é transitório —
     // tenta de novo com backoff crescente antes de desistir, em vez de marcar como erro
-    // definitivo do SKU (o que faria a sincronização inteira parecer quebrada por um
-    // throttling passageiro, como aconteceu quando 379 SKUs falharam de uma vez).
+    // definitivo do SKU. Já um bloqueio "duro" (TinyApiBlockedError) não se resolve em
+    // segundos — não insiste, aborta a rodada inteira (ver comentário na definição da
+    // classe acima).
     let result: TinyFetchCostResult | null = null;
     let lastError: unknown = null;
     for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
@@ -177,9 +195,19 @@ export async function runTinySyncBatch(empresaId: string, opts: { budgetMs: numb
         break;
       } catch (err) {
         lastError = err;
+        if (err instanceof TinyApiBlockedError) break;
         if (!(err instanceof TinyRateLimitError) || attempt === MAX_RATE_LIMIT_RETRIES) break;
         await sleep(PACING_MS * (attempt + 2));
       }
+    }
+
+    if (lastError instanceof TinyApiBlockedError) {
+      blocked = true;
+      errors.push({ sku: product.sku, message: lastError.message });
+      // Não avança o updatedAt: este SKU nem chegou a ser tentado de verdade (foi
+      // recusado de cara pelo bloqueio), então continua sendo o primeiro da fila quando
+      // a sincronização for retomada.
+      break;
     }
 
     if (lastError) {
@@ -206,10 +234,10 @@ export async function runTinySyncBatch(empresaId: string, opts: { budgetMs: numb
     if (processed < products.length) await sleep(PACING_MS);
   }
 
-  const done = processed === products.length && products.length >= total;
+  const done = !blocked && processed === products.length && products.length >= total;
   if (done) {
     await prisma.markupRuleset.update({ where: { id: empresaId }, data: { tinyLastSyncAt: new Date() } });
   }
 
-  return { processed, total, updated, errors, done };
+  return { processed, total, updated, errors, done, blocked };
 }

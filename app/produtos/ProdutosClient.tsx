@@ -250,7 +250,7 @@ async function saveToDb(nextProducts: Product[], empresaId: string) {
 }
 
 type TinySyncError = { sku: string; message: string };
-type TinySyncEmpresaResult = { empresaId: string; name: string; processed: number; total: number; done: boolean; errors?: TinySyncError[] };
+type TinySyncEmpresaResult = { empresaId: string; name: string; processed: number; total: number; done: boolean; blocked?: boolean; errors?: TinySyncError[] };
 
 export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
   const [products, setProducts] = useState<Product[]>([]);
@@ -696,6 +696,8 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
     let processedSoFar = 0;
     let totalKnown = 0;
     let updatedTotal = 0;
+    let blockedWaits = 0;
+    let gaveUpDueToBlock = false;
     const allErrors: TinySyncError[] = [];
     setSyncState({ running: true, processed: 0, total: 0, mode: all ? "all" : "single" });
     setSyncErrorSummary("");
@@ -714,6 +716,7 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
         }
 
         let done: boolean;
+        let blockedNow: boolean;
         if (all) {
           const empresasResult = (data.empresas ?? []) as TinySyncEmpresaResult[];
           if (round === 0) totalKnown = empresasResult.reduce((s, e) => s + e.total, 0);
@@ -721,19 +724,39 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
           updatedTotal += empresasResult.reduce((s, e) => s + ((e as { updated?: number }).updated ?? 0), 0);
           for (const e of empresasResult) allErrors.push(...(e.errors ?? []));
           done = Boolean(data.done);
+          blockedNow = empresasResult.some((e) => e.blocked);
         } else {
           if (round === 0) totalKnown = data.total ?? 0;
           processedSoFar += data.processed ?? 0;
           updatedTotal += data.updated ?? 0;
           allErrors.push(...((data.errors ?? []) as TinySyncError[]));
           done = Boolean(data.done);
+          blockedNow = Boolean(data.blocked);
         }
 
         setSyncState({ running: !done, processed: Math.min(processedSoFar, totalKnown), total: totalKnown, mode: all ? "all" : "single" });
         if (done) break;
+
+        // O Tiny pede "aguarde alguns minutos" quando bloqueia por excesso de acessos —
+        // insistir rápido só piora. Continua automaticamente (sem precisar clicar de
+        // novo), mas espera de verdade antes da próxima tentativa, e desiste depois de
+        // algumas rodadas bloqueadas (a sincronização semanal automática continua depois).
+        if (blockedNow) {
+          blockedWaits++;
+          if (blockedWaits > 5) {
+            gaveUpDueToBlock = true;
+            break;
+          }
+          setStatus(`Tiny bloqueou temporariamente o acesso à API (excesso de acessos) — continuando automaticamente em 2 minutos…`);
+          await new Promise((resolve) => setTimeout(resolve, 120000));
+        }
       }
 
-      if (allErrors.length > 0) {
+      if (gaveUpDueToBlock) {
+        const msg = `Tiny seguiu bloqueando o acesso à API após várias tentativas. ${updatedTotal} produto(s) atualizado(s) até agora — a sincronização semanal automática vai continuar de onde parou. Você também pode tentar de novo manualmente daqui a alguns minutos.`;
+        setSyncErrorSummary(msg);
+        toast(`Sincronização pausada: ${updatedTotal} atualizado(s), Tiny seguiu bloqueando o acesso.`);
+      } else if (allErrors.length > 0) {
         console.warn(`Sincronização com o Tiny: ${allErrors.length} SKU(s) sem custo atualizado.`, allErrors);
         const counts = new Map<string, number>();
         for (const e of allErrors) counts.set(e.message, (counts.get(e.message) ?? 0) + 1);

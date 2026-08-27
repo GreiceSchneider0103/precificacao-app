@@ -5,6 +5,7 @@ import {
   fetchTinyCostBySku,
   runTinySyncBatch,
   TinyRateLimitError,
+  TinyApiBlockedError,
 } from "@/lib/tiny";
 
 jest.mock("@/lib/prisma", () => ({
@@ -114,6 +115,16 @@ describe("tinySearchProdutoBySku", () => {
   it("lança TinyRateLimitError quando o Tiny recusa por texto de limite de requisições", async () => {
     mockFetchOnce({ retorno: { status: "Erro", erros: [{ erro: "Limite de requisições excedido" }] } });
     await expect(tinySearchProdutoBySku("token", "ABC-123")).rejects.toBeInstanceOf(TinyRateLimitError);
+  });
+
+  it("lança TinyApiBlockedError quando o Tiny bloqueia a API por cota excedida (mensagem real observada)", async () => {
+    mockFetchOnce({
+      retorno: {
+        status: "Erro",
+        erros: [{ erro: "API Bloqueada - Excedido o número de acessos a API, aguarde alguns minutos e tente novamente" }],
+      },
+    });
+    await expect(tinySearchProdutoBySku("token", "ABC-123")).rejects.toBeInstanceOf(TinyApiBlockedError);
   });
 });
 
@@ -297,4 +308,34 @@ describe("runTinySyncBatch", () => {
     expect(result.errors).toEqual([{ sku: "SKU1", message: expect.stringContaining("limitou") }]);
     expect(prisma.product.update).toHaveBeenCalledWith({ where: { id: "p1" }, data: { updatedAt: expect.any(Date) } });
   }, 30000);
+
+  it("aborta a rodada inteira sem retry quando o Tiny bloqueia a API (não insiste, não avança updatedAt do SKU bloqueado)", async () => {
+    prisma.markupRuleset.findUnique.mockResolvedValue({ id: "emp1", tinyApiToken: "tok" });
+    prisma.product.count.mockResolvedValue(3);
+    prisma.product.findMany.mockResolvedValue([
+      { id: "p1", sku: "SKU1", name: "Produto 1", updatedAt: new Date(0) },
+      { id: "p2", sku: "SKU2", name: "Produto 2", updatedAt: new Date(1) },
+      { id: "p3", sku: "SKU3", name: "Produto 3", updatedAt: new Date(2) },
+    ]);
+    prisma.product.update.mockResolvedValue({});
+    prisma.markupRuleset.update.mockResolvedValue({});
+
+    mockFetchOnce({
+      retorno: {
+        status: "Erro",
+        erros: [{ erro: "API Bloqueada - Excedido o número de acessos a API, aguarde alguns minutos e tente novamente" }],
+      },
+    });
+
+    const result = await runTinySyncBatch("emp1", { budgetMs: 20000 });
+
+    // Só 1 chamada fetch no total (nenhum retry, nenhum outro SKU tentado).
+    expect((global.fetch as jest.Mock).mock.calls).toHaveLength(1);
+    expect(result.blocked).toBe(true);
+    expect(result.done).toBe(false);
+    expect(result.errors).toEqual([{ sku: "SKU1", message: expect.stringContaining("API Bloqueada") }]);
+    // O SKU bloqueado não teve o updatedAt avançado — continua primeiro da fila.
+    expect(prisma.product.update).not.toHaveBeenCalled();
+    expect(prisma.markupRuleset.update).not.toHaveBeenCalled();
+  });
 });
