@@ -4,6 +4,7 @@ import {
   tinyObterProduto,
   fetchTinyCostBySku,
   runTinySyncBatch,
+  TinyRateLimitError,
 } from "@/lib/tiny";
 
 jest.mock("@/lib/prisma", () => ({
@@ -103,6 +104,16 @@ describe("tinySearchProdutoBySku", () => {
   it("lança erro quando a resposta HTTP não é ok", async () => {
     mockFetchOnce({}, false);
     await expect(tinySearchProdutoBySku("token", "ABC-123")).rejects.toThrow();
+  });
+
+  it("lança TinyRateLimitError quando o Tiny responde HTTP 429", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false, status: 429, json: async () => ({}) });
+    await expect(tinySearchProdutoBySku("token", "ABC-123")).rejects.toBeInstanceOf(TinyRateLimitError);
+  });
+
+  it("lança TinyRateLimitError quando o Tiny recusa por texto de limite de requisições", async () => {
+    mockFetchOnce({ retorno: { status: "Erro", erros: [{ erro: "Limite de requisições excedido" }] } });
+    await expect(tinySearchProdutoBySku("token", "ABC-123")).rejects.toBeInstanceOf(TinyRateLimitError);
   });
 });
 
@@ -239,4 +250,51 @@ describe("runTinySyncBatch", () => {
     // Mesmo sem custo, o updatedAt avança (para não travar a fila nas próximas rodadas).
     expect(prisma.product.update).toHaveBeenCalledWith({ where: { id: "p1" }, data: { updatedAt: expect.any(Date) } });
   }, 10000);
+
+  it("tenta de novo com backoff quando o Tiny limita as requisições, e conta como sucesso se uma tentativa seguinte funcionar", async () => {
+    prisma.markupRuleset.findUnique.mockResolvedValue({ id: "emp1", tinyApiToken: "tok" });
+    prisma.product.count.mockResolvedValue(1);
+    prisma.product.findMany.mockResolvedValue([{ id: "p1", sku: "SKU1", name: "Produto 1", updatedAt: new Date(0) }]);
+    prisma.product.update.mockResolvedValue({});
+    prisma.markupRuleset.update.mockResolvedValue({});
+
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false, status: 429, json: async () => ({}) }); // 1ª tentativa: limitado
+    mockFetchOnce({ retorno: { status: "OK", produtos: [{ produto: { id: 1, codigo: "SKU1" } }] } }); // 2ª tentativa: ok
+    mockFetchOnce({ retorno: { status: "OK", produto: { preco_custo: 30, nome: "Produto 1" } } });
+
+    const result = await runTinySyncBatch("emp1", { budgetMs: 20000 });
+
+    expect(result.updated).toBe(1);
+    expect(result.errors).toHaveLength(0);
+    expect(prisma.product.update).toHaveBeenCalledWith({
+      where: { id: "p1" },
+      data: { cmv: 30, name: "Produto 1", updatedAt: expect.any(Date) },
+    });
+  }, 20000);
+
+  it("desiste após esgotar as tentativas de retry por limite de requisições, registra o erro e segue para o próximo SKU", async () => {
+    prisma.markupRuleset.findUnique.mockResolvedValue({ id: "emp1", tinyApiToken: "tok" });
+    prisma.product.count.mockResolvedValue(2);
+    prisma.product.findMany.mockResolvedValue([
+      { id: "p1", sku: "SKU1", name: "Produto 1", updatedAt: new Date(0) },
+      { id: "p2", sku: "SKU2", name: "Produto 2", updatedAt: new Date(1) },
+    ]);
+    prisma.product.update.mockResolvedValue({});
+    prisma.markupRuleset.update.mockResolvedValue({});
+
+    // SKU1: todas as tentativas (1 + 3 retries) são limitadas.
+    for (let i = 0; i < 4; i++) {
+      (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false, status: 429, json: async () => ({}) });
+    }
+    // SKU2: sucesso normal.
+    mockFetchOnce({ retorno: { status: "OK", produtos: [{ produto: { id: 2, codigo: "SKU2" } }] } });
+    mockFetchOnce({ retorno: { status: "OK", produto: { preco_custo: 20, nome: "P2" } } });
+
+    const result = await runTinySyncBatch("emp1", { budgetMs: 20000 });
+
+    expect(result.processed).toBe(2);
+    expect(result.updated).toBe(1);
+    expect(result.errors).toEqual([{ sku: "SKU1", message: expect.stringContaining("limitou") }]);
+    expect(prisma.product.update).toHaveBeenCalledWith({ where: { id: "p1" }, data: { updatedAt: expect.any(Date) } });
+  }, 30000);
 });

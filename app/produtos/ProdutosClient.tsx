@@ -262,6 +262,7 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [status, setStatus] = useState<string>("");
   const [saving, setSaving] = useState(false);
+  const [syncErrorSummary, setSyncErrorSummary] = useState<string>("");
   const [syncState, setSyncState] = useState<{ running: boolean; processed: number; total: number; mode: "single" | "all" | null }>({
     running: false,
     processed: 0,
@@ -697,9 +698,10 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
     let updatedTotal = 0;
     const allErrors: TinySyncError[] = [];
     setSyncState({ running: true, processed: 0, total: 0, mode: all ? "all" : "single" });
+    setSyncErrorSummary("");
 
     try {
-      for (let round = 0; round < 50; round++) {
+      for (let round = 0; round < 120; round++) {
         const res = await fetch("/api/tiny/sync", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -733,7 +735,12 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
 
       if (allErrors.length > 0) {
         console.warn(`Sincronização com o Tiny: ${allErrors.length} SKU(s) sem custo atualizado.`, allErrors);
-        toast(`Sincronização concluída: ${updatedTotal} atualizado(s), ${allErrors.length} sem retorno do Tiny (veja o console).`);
+        const counts = new Map<string, number>();
+        for (const e of allErrors) counts.set(e.message, (counts.get(e.message) ?? 0) + 1);
+        const topMessages = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+        const reasons = topMessages.map(([msg, count]) => `"${msg}"${count > 1 ? ` (${count}x)` : ""}`).join("; ");
+        setSyncErrorSummary(`${updatedTotal} atualizado(s), ${allErrors.length} sem retorno do Tiny. Motivo: ${reasons}`);
+        toast(`Sincronização concluída: ${updatedTotal} atualizado(s), ${allErrors.length} sem retorno do Tiny.`);
       } else {
         toast(`Sincronização com o Tiny concluída: ${updatedTotal} produto(s) atualizado(s).`);
       }
@@ -741,7 +748,9 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
       setProducts(fresh);
     } catch (e) {
       console.error(e);
-      toast("Erro ao sincronizar com o Tiny (veja o console).");
+      const msg = e instanceof Error ? e.message : String(e);
+      setSyncErrorSummary(`Erro ao sincronizar com o Tiny: "${msg}"`);
+      toast("Erro ao sincronizar com o Tiny.");
     } finally {
       setSyncState((s) => ({ ...s, running: false }));
     }
@@ -825,6 +834,15 @@ export function ProdutosClient({ role }: { role: "MASTER" | "MEMBER" }) {
         {syncState.running && (
           <div className="w-full text-xs" style={{ color: "var(--muted)" }}>
             Sincronizando com o Tiny… {syncState.total > 0 ? `${syncState.processed} de ${syncState.total} SKUs` : "iniciando…"}
+          </div>
+        )}
+
+        {!syncState.running && syncErrorSummary && (
+          <div
+            className="w-full rounded-lg border px-3 py-2 text-xs"
+            style={{ borderColor: "var(--warn)", background: "var(--warn-soft)", color: "var(--text)" }}
+          >
+            {syncErrorSummary}
           </div>
         )}
       </div>

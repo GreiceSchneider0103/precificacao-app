@@ -12,7 +12,15 @@
 import { prisma } from "@/lib/prisma";
 
 const TINY_BASE = "https://api.tiny.com.br/api2";
-const PACING_MS = 350; // intervalo entre chamadas ao Tiny, para não estourar limite de taxa
+const PACING_MS = 700; // intervalo entre chamadas ao Tiny, para não estourar limite de taxa
+const MAX_RATE_LIMIT_RETRIES = 3;
+
+// Erro específico para respostas de limite de requisições do Tiny (HTTP 429 ou texto do
+// tipo "limite de requisições excedido"), tratado com retry/backoff em vez de falha
+// definitiva — diferente de um erro real de SKU/token, que não se resolve tentando de novo.
+export class TinyRateLimitError extends Error {}
+
+const RATE_LIMIT_PATTERN = /limite de requisi|muitas requisi|too many requests|rate limit|excedeu o limite/i;
 
 export type TinySyncError = { sku: string; message: string };
 
@@ -67,10 +75,13 @@ function tinyErrorMessage(retorno: TinyRetornoBase | undefined, fallback: string
 export async function tinySearchProdutoBySku(token: string, sku: string): Promise<{ id: string } | null> {
   const url = `${TINY_BASE}/produtos.pesquisa.php?token=${encodeURIComponent(token)}&formato=json&pesquisa=${encodeURIComponent(sku)}`;
   const res = await fetch(url);
+  if (res.status === 429) throw new TinyRateLimitError(`Tiny limitou as requisições ao pesquisar SKU ${sku} (HTTP 429)`);
   if (!res.ok) throw new Error(`Tiny respondeu ${res.status} ao pesquisar SKU ${sku}`);
   const json = (await res.json()) as TinyPesquisaResponse;
   if (json.retorno?.status !== "OK") {
-    throw new Error(tinyErrorMessage(json.retorno, `Tiny recusou a pesquisa do SKU ${sku} (verifique o token)`));
+    const message = tinyErrorMessage(json.retorno, `Tiny recusou a pesquisa do SKU ${sku} (verifique o token)`);
+    if (RATE_LIMIT_PATTERN.test(message)) throw new TinyRateLimitError(message);
+    throw new Error(message);
   }
 
   const skuNorm = sku.trim().toUpperCase();
@@ -95,10 +106,13 @@ export function extractCostFromTinyProduto(produto: TinyProdutoDetalhe | undefin
 export async function tinyObterProduto(token: string, id: string): Promise<{ cmv: number | null; nome: string | null } | null> {
   const url = `${TINY_BASE}/produto.obter.php?token=${encodeURIComponent(token)}&formato=json&id=${encodeURIComponent(id)}`;
   const res = await fetch(url);
+  if (res.status === 429) throw new TinyRateLimitError(`Tiny limitou as requisições ao obter o produto ${id} (HTTP 429)`);
   if (!res.ok) throw new Error(`Tiny respondeu ${res.status} ao obter produto ${id}`);
   const json = (await res.json()) as TinyObterResponse;
   if (json.retorno?.status !== "OK") {
-    throw new Error(tinyErrorMessage(json.retorno, `Tiny recusou ao obter o produto ${id} (verifique o token)`));
+    const message = tinyErrorMessage(json.retorno, `Tiny recusou ao obter o produto ${id} (verifique o token)`);
+    if (RATE_LIMIT_PATTERN.test(message)) throw new TinyRateLimitError(message);
+    throw new Error(message);
   }
   if (!json.retorno.produto) return null;
 
@@ -150,26 +164,42 @@ export async function runTinySyncBatch(empresaId: string, opts: { budgetMs: numb
   for (const product of products) {
     if (Date.now() - start > opts.budgetMs) break;
 
-    try {
-      const result = await fetchTinyCostBySku(token, product.sku);
-      if (result.ok) {
-        await prisma.product.update({
-          where: { id: product.id },
-          data: { cmv: result.cmv, name: result.nome ?? product.name, updatedAt: new Date() },
-        });
-        updated++;
-      } else {
-        // Mesmo sem atualizar o custo, avança o updatedAt: senão este SKU some da
-        // "frente da fila" (ordenação por mais antigo) e trava a rodada seguinte
-        // tentando ele de novo antes de qualquer outro produto pendente.
-        await prisma.product.update({ where: { id: product.id }, data: { updatedAt: new Date() } });
-        errors.push({
-          sku: product.sku,
-          message: result.reason === "not_found" ? "SKU não encontrado no Tiny" : "Tiny não retornou um custo válido para este SKU",
-        });
+    // Limite de requisições do Tiny (HTTP 429 ou texto "limite excedido") é transitório —
+    // tenta de novo com backoff crescente antes de desistir, em vez de marcar como erro
+    // definitivo do SKU (o que faria a sincronização inteira parecer quebrada por um
+    // throttling passageiro, como aconteceu quando 379 SKUs falharam de uma vez).
+    let result: TinyFetchCostResult | null = null;
+    let lastError: unknown = null;
+    for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
+      try {
+        result = await fetchTinyCostBySku(token, product.sku);
+        lastError = null;
+        break;
+      } catch (err) {
+        lastError = err;
+        if (!(err instanceof TinyRateLimitError) || attempt === MAX_RATE_LIMIT_RETRIES) break;
+        await sleep(PACING_MS * (attempt + 2));
       }
-    } catch (err) {
-      errors.push({ sku: product.sku, message: err instanceof Error ? err.message : String(err) });
+    }
+
+    if (lastError) {
+      // Mesmo em erro, avança o updatedAt: senão este SKU some da "frente da fila"
+      // (ordenação por mais antigo) e trava a rodada seguinte tentando ele de novo antes
+      // de qualquer outro produto pendente.
+      await prisma.product.update({ where: { id: product.id }, data: { updatedAt: new Date() } });
+      errors.push({ sku: product.sku, message: lastError instanceof Error ? lastError.message : String(lastError) });
+    } else if (result?.ok) {
+      await prisma.product.update({
+        where: { id: product.id },
+        data: { cmv: result.cmv, name: result.nome ?? product.name, updatedAt: new Date() },
+      });
+      updated++;
+    } else if (result) {
+      await prisma.product.update({ where: { id: product.id }, data: { updatedAt: new Date() } });
+      errors.push({
+        sku: product.sku,
+        message: result.reason === "not_found" ? "SKU não encontrado no Tiny" : "Tiny não retornou um custo válido para este SKU",
+      });
     }
 
     processed++;
